@@ -3809,7 +3809,7 @@ SPA.pages["palpites"]={style:``,script:function(){
   var user = Auth.user;
   var userId = user.id || user.email;
 
-  var ALL_TEAMS = ["Alemanha", "Argentina", "Argélia", "Arábia Saudita", "Austrália", "Brasil", "Bélgica", "Bósnia e Herzegovina", "Cabo Verde", "Canadá", "Catar", "Colômbia", "Costa do Marfim", "Croácia", "Curaçau", "Egito", "Equador", "Escócia", "Espanha", "Estados Unidos", "França", "Gana", "Haiti", "Holanda", "Inglaterra", "Iraque", "Irã", "Japão", "Jordânia", "Marrocos", "México", "Noruega", "Nova Zelândia", "Panamá", "Paraguai", "Portugal", "República Democrática do Congo", "República Tcheca", "República da Coreia", "Senegal", "Suécia", "Suíça", "Tunísia", "Turquia", "Uruguai", "Uzbequistão", "África do Sul", "Áustria"];
+  var ALL_TEAMS = ["Alemanha", "Argentina", "Argélia", "Arábia Saudita", "Austrália", "Brasil", "Bélgica", "Bósnia e Herzegovina", "Cabo Verde", "Canadá", "Catar", "Colômbia", "Costa do Marfim", "Croácia", "Curaçau", "Egito", "Equador", "Escócia", "Espanha", "Estados Unidos", "França", "Gana", "Haiti", "Holanda", "Inglaterra", "Iraque", "Irã", "Japão", "Jordânia", "Marrocos", "México", "Noruega", "Nova Zelândia", "Panamá", "Paraguai", "Portugal", "República da Coreia", "República Democrática do Congo", "República Tcheca", "Senegal", "Suécia", "Suíça", "Tunísia", "Turquia", "Uruguai", "Uzbequistão", "África do Sul", "Áustria"];
 
   var saved = DB.getUserSpecials(userId);
   var sel = {
@@ -3958,7 +3958,7 @@ SPA.pages["palpites"]={style:``,script:function(){
     // Teams not already used in other fields
     var blocked = [];
     ['champion','runner_up','third'].forEach(function(f){ if (f!==field && sel[f]) blocked.push(sel[f]); });
-    var available = ALL_TEAMS.filter(function(t){ return blocked.indexOf(t) < 0 || t === current; });
+    var available = ALL_TEAMS.filter(function(t){ return blocked.indexOf(t) < 0 || t === current; }).sort(function(a,b){ return a.localeCompare(b,'pt'); });
 
     var h = '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
     // Header
@@ -4013,7 +4013,7 @@ SPA.pages["palpites"]={style:``,script:function(){
     h += '<div style="padding:14px 18px;">';
     h += '<div id="qual-chips">'+chipsHtml()+'</div>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;">';
-    ALL_TEAMS.forEach(function(t) {
+    ALL_TEAMS.slice().sort(function(a,b){return a.localeCompare(b,'pt');}).forEach(function(t) {
       var isSel = sel.qualified.indexOf(t) >= 0;
       h += '<button data-qualify="'+t+'" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 3px;';
       h += 'background:'+(isSel?'rgba(27,43,107,.1)':'white')+';';
