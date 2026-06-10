@@ -6282,7 +6282,7 @@ setInterval(async function() {
 
 // Global apostas click handler — registered ONCE at app boot
 document.addEventListener('click', function _apostasGlobalHandler(e) {
-  if (SPA.current !== 'palpites') return;
+  if (SPA.current !== 'apostas') return;
   // Filter buttons
   var fb = e.target.closest('[data-betfilter]');
   if (fb) {
