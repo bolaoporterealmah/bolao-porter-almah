@@ -2536,7 +2536,7 @@ var SPA={
   _shell: function(page, user) {
     var NAV=[
       {id:"dashboard",icon:"🏠",label:"Dashboard"},
-      {id:"palpites",icon:"⚽",label:"Palpites"},
+      {id:"apostas",icon:"⚽",label:"Palpites"},
       {id:"apostas_dia",icon:"📋",label:"Palpites do Dia"},
       {id:"ranking",icon:"🏆",label:"Ranking"},
       {id:"resultados",icon:"🏟️",label:"Resultados"},
@@ -4255,7 +4255,7 @@ function openUserModal() {
 // ── Export CSV ────────────────────────────────────────────────────────────────
 function exportCsv() {
   var ranking = DB.getRanking();
-  var csv = 'Posição,Nome,Empresa,Pontos,Exatos,Vencedores,Apostas\n'+
+  var csv = 'Posição,Nome,Empresa,Pontos,Exatos,Vencedores,Palpites\n'+
     ranking.map(function(r){return r.position+',"'+r.name+'","'+r.company+'",'+r.totalPts+','+r.exactScores+','+r.correctWinners+','+r.betCount;}).join('\n');
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   var url = URL.createObjectURL(blob);
@@ -4513,7 +4513,7 @@ SPA.pages["hall"]={style:`.hall-hero {
   // Rei dos placares (mais placares exatos)
   var reiPlacares = ranking.slice().sort(function(a,b){ return b.exactScores - a.exactScores; })[0];
 
-  // Apostador dedicado (mais apostas feitas)
+  // Palpitador dedicado (mais palpites feitos)
   var maisApostas = ranking.slice().sort(function(a,b){ return b.betCount - a.betCount; })[0];
 
   // Maior pontuação em jogo único
@@ -4550,7 +4550,7 @@ SPA.pages["hall"]={style:`.hall-hero {
     { bg:'linear-gradient(135deg,#E0E0E0,#BDBDBD)', textColor:'rgba(0,0,0,.6)',  icon:'🥈', title:'Vice-Campeão',         sub:'2º lugar no ranking final',           person: top2,        val: top2 ? top2.totalPts+' pts' : null },
     { bg:'linear-gradient(135deg,#CD9B6B,#A0522D)', textColor:'white',           icon:'🥉', title:'3º Lugar',             sub:'3º lugar no ranking final',           person: top3,        val: top3 ? top3.totalPts+' pts' : null },
     { bg:'linear-gradient(135deg,#1B2B6B,#3D5AC8)', textColor:'white',           icon:'🎯', title:'Rei dos Placares',     sub:'Mais placares exatos na Copa',        person: reiPlacares, val: reiPlacares ? reiPlacares.exactScores+' exatos' : null },
-    { bg:'linear-gradient(135deg,#7c3aed,#a855f7)', textColor:'white',           icon:'📝', title:'Apostador Dedicado',   sub:'Mais palpites realizadas',             person: maisApostas, val: maisApostas ? maisApostas.betCount+' palpites' : null },
+    { bg:'linear-gradient(135deg,#7c3aed,#a855f7)', textColor:'white',           icon:'📝', title:'Palpitador Dedicado',   sub:'Mais palpites realizadas',             person: maisApostas, val: maisApostas ? maisApostas.betCount+' palpites' : null },
   ];
 
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;">';
@@ -4594,9 +4594,9 @@ SPA.pages["hall"]={style:`.hall-hero {
   var medals = [
     { icon:'🏆', name:'Campeão do Bolão',      desc:'1º lugar no ranking final',              holder: copa_started&&top1?top1:null },
     { icon:'🎯', name:'Rei dos Placares',       desc:'Mais placares exatos na Copa',           holder: copa_started&&reiPlacares?reiPlacares:null },
-    { icon:'📝', name:'Apostador Dedicado',     desc:'Mais palpites realizadas',                holder: copa_started&&maisApostas?maisApostas:null },
+    { icon:'📝', name:'Palpitador Dedicado',     desc:'Mais palpites realizadas',                holder: copa_started&&maisApostas?maisApostas:null },
     { icon:'🌟', name:'Top 15 do Bolão',        desc:'Terminar entre os 15 melhores',          holder: null },
-    { icon:'💯', name:'100% de Apostas',        desc:'Apostar em todos os jogos',              holder: null },
+    { icon:'💯', name:'100% de Palpites',        desc:'Palpitar em todos os jogos',              holder: null },
     { icon:'⚡', name:'Melhor da Empresa',      desc:'1º colocado de cada empresa',            holder: null },
   ];
 
@@ -5282,7 +5282,7 @@ SPA.pages["regras"]={style:``,script:function(){
   [
     ['⏰','Prazo para palpites','Os palpites fecham <strong>1 hora antes</strong> do início de cada jogo. Após esse prazo não é possível alterar.'],
     ['🔒','Palpites Especiais','Devem ser feitos até <strong>10/06/2026 às 23h59</strong>. Após o início da Copa não é possível editar.'],
-    ['📊','Desempate no Ranking','Em caso de empate em pontos: 1º mais placares exatos · 2º mais apostas feitas · 3º menor tempo médio de envio.'],
+    ['📊','Desempate no Ranking','Em caso de empate em pontos: 1º mais placares exatos · 2º mais palpites feitos · 3º menor tempo médio de envio.'],
     ['🔄','Atualização','Os resultados são inseridos pelo administrador. A pontuação é calculada automaticamente após cada resultado.'],
     ['👥','Participação','Aberto para colaboradores da Porter e Almah. Cada participante tem sua própria conta e histórico de palpites.'],
     ['🎯','Palpite Especial Extra','Máximo de 16 times para os classificados às Oitavas. Cada acerto vale +5 pts (máx. 80 pts extras).'],
@@ -5348,7 +5348,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
         upcoming = realGames
           .sort(function(a,b){ return new Date(a.date)-new Date(b.date); })
           .slice(0,3);
-        displayLabel = '📋 Primeiros Jogos da Copa — Apostas Registradas';
+        displayLabel = '📋 Primeiros Jogos da Copa — Palpites Registrados';
       } else {
         var nextDate = upcoming[0].date.slice(0,10);
         var nextDateObj = new Date(nextDate + 'T12:00:00');
