@@ -2435,7 +2435,7 @@ const Utils = {
 
     const navItems = [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard', href: 'dashboard.html' },
-      { id: 'apostas', icon: '⚽', label: 'Apostas', href: 'apostas.html', badge: null },
+      { id: 'apostas', icon: '⚽', label: 'Palpites', href: 'apostas.html', badge: null },
       { id: 'palpites', icon: '🎯', label: 'Palpites Especiais', href: 'palpites.html' },
       { id: 'ranking', icon: '🏆', label: 'Ranking', href: 'ranking.html' },
       { id: 'chaveamento', icon: '📋', label: 'Chaveamento', href: 'chaveamento.html' },
@@ -2491,7 +2491,7 @@ const Utils = {
         <span class="topbar-title">${navItems.find(n=>n.id===activeNav)?.label || (activeNav==='admin'?'Admin':'Bolão Copa 2026')}</span>
       </div>
       <div class="topbar-right">
-        <button class="topbar-btn" onclick="window.location.href='apostas.html'" title="Apostas">
+        <button class="topbar-btn" onclick="window.location.href='apostas.html'" title="Palpites">
           <span>⚽</span>
           ${pendingBets > 0 ? '<span class="badge"></span>' : ''}
         </button>
@@ -2536,8 +2536,8 @@ var SPA={
   _shell: function(page, user) {
     var NAV=[
       {id:"dashboard",icon:"🏠",label:"Dashboard"},
-      {id:"apostas",icon:"⚽",label:"Apostas"},
-      {id:"apostas_dia",icon:"📋",label:"Apostas do Dia"},
+      {id:"apostas",icon:"⚽",label:"Palpites"},
+      {id:"apostas_dia",icon:"📋",label:"Palpites do Dia"},
       {id:"ranking",icon:"🏆",label:"Ranking"},
       {id:"resultados",icon:"🏟️",label:"Resultados"},
       {id:"palpites",icon:"🎯",label:"Palpites Especiais"},
@@ -2566,7 +2566,7 @@ var SPA={
       sb.innerHTML=h;
       sb.addEventListener('click',function(e){var a=e.target.closest('[data-nav]');if(a)SPA.navigate(a.getAttribute('data-nav'));});
     }
-    var LABELS={dashboard:'Dashboard',apostas:'Apostas','apostas_dia':'Apostas do Dia',ranking:'Ranking',palpites:'Palpites Especiais',regras:'Regras & Pontuação',chaveamento:'Chaveamento',perfil:'Meu Perfil',hall:'Hall da Fama',admin:'Gerenciar Jogos',config:'Configurações'};
+    var LABELS={dashboard:'Dashboard',apostas:'Palpites','apostas_dia':'Palpites do Dia',ranking:'Ranking',palpites:'Palpites Especiais',regras:'Regras & Pontuação',chaveamento:'Chaveamento',perfil:'Meu Perfil',hall:'Hall da Fama',admin:'Gerenciar Jogos',config:'Configurações'};
     var tb=document.querySelector('.topbar');
     if(tb){
       var t='<div class="topbar-left"><button class="topbar-btn menu-toggle" data-action="togglesidebar"><span style="font-size:1.2rem">☰</span></button><span class="topbar-title">'+(LABELS[page]||'')+'</span></div><div class="topbar-right">';
@@ -2837,7 +2837,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
 
     // My position
     h += '<div style="background:linear-gradient(135deg,#1B2B6B,#2A3F9A);border-radius:14px;padding:20px 24px;color:white;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">';
-    [[myRank.position+'º','Posição',true],[myRank.totalPts+' pts','Pontuação',false],[myRank.exactScores,'Exatos',false],[myRank.betCount,'Apostas',false]].forEach(function(x){
+    [[myRank.position+'º','Posição',true],[myRank.totalPts+' pts','Pontuação',false],[myRank.exactScores,'Exatos',false],[myRank.betCount,'Palpites',false]].forEach(function(x){
       h += '<div><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.6;margin-bottom:2px;">'+x[1]+'</div>';
       h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.7rem;font-weight:900;line-height:1;color:'+(x[2]?'#F5C518':'white')+';">'+x[0]+'</div></div>';
     });
@@ -3094,15 +3094,15 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
 
     // Stats
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">';
-    h += sCard('Apostas Abertas', games.filter(function(g){return Utils.canBet(g);}).length, '#1B2B6B');
-    h += sCard('Minhas Apostas', doneCount, '#16A34A');
+    h += sCard('Palpites Abertos', games.filter(function(g){return Utils.canBet(g);}).length, '#1B2B6B');
+    h += sCard('Meus Palpites', doneCount, '#16A34A');
     h += sCard('Pendentes', openCount, '#D4A80F');
     h += sCard('Fecha 1h antes', '⏰', '#5A6385');
     h += '</div>';
 
     // Filter buttons
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;">';
-    [['all','Todos'],['open','Abertos'],['pending','Pendentes'],['done','Apostados'],['finished','Finalizados']].forEach(function(f){
+    [['all','Todos'],['open','Abertos'],['pending','Pendentes'],['done','Palpitados'],['finished','Finalizados']].forEach(function(f){
       var active = f[0]===currentFilter;
       h += '<button data-betfilter="'+f[0]+'" style="padding:5px 14px;border-radius:99px;font-size:.78rem;font-weight:600;cursor:pointer;border:1px solid '+(active?'#1B2B6B':'#DDE1EE')+';background:'+(active?'#1B2B6B':'white')+';color:'+(active?'white':'#5A6385')+';">'+f[1]+'</button>';
     });
@@ -3147,9 +3147,9 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
       var hv=h_el.value, av=a_el.value;
       if(hv===''||av===''){Utils.toast('Informe o placar completo!','error');return;}
       var game=DB.getGames().find(function(g){return g.id===gameId;});
-      if(!game||!Utils.canBet(game)){Utils.toast('Apostas encerradas.','error');return;}
+      if(!game||!Utils.canBet(game)){Utils.toast('Palpites encerrados.','error');return;}
       DB.saveBet(user.email||user.id,gameId,{home_score:parseInt(hv),away_score:parseInt(av)});
-      Utils.toast('Aposta salva: '+game.home+' '+hv+'×'+av+' '+game.away+' ✓','success');
+      Utils.toast('Palpite salvo: '+game.home+' '+hv+'×'+av+' '+game.away+' ✓','success');
       render();
     };
   }
@@ -3255,7 +3255,7 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
     // Footer
     h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
     if (hasBet && !isFinished && !canBet) {
-      h += '<span style="font-size:.72rem;font-weight:700;color:#16A34A;">✓ Aposta salva: '+bet.home_score+'×'+bet.away_score+'</span>';
+      h += '<span style="font-size:.72rem;font-weight:700;color:#16A34A;">✓ Palpite salvo: '+bet.home_score+'×'+bet.away_score+'</span>';
     } else if (!canBet && !hasBet && !isFinished) {
       h += '<span style="font-size:.72rem;font-weight:700;color:#9CA3BF;">🔒 Encerrado</span>';
     } else if (canBet) {
@@ -3373,7 +3373,7 @@ SPA.pages["ranking"]={style:``,script:function(){
     h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#2563EB;text-align:center;" title="Vencedor correto">✅ Vencedor</th>';
     h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7C3AED;text-align:center;" title="Saldo de gols">📊 Saldo</th>';
     h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#EA580C;text-align:center;" title="Gols de um time">⚽ 1 Time</th>';
-    h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9CA3BF;text-align:center;">Apostas</th>';
+    h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9CA3BF;text-align:center;">Palpites</th>';
     h += '<th style="padding:9px 12px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#1B2B6B;text-align:right;">Pontos</th>';
     h += '</tr></thead><tbody>';
 
@@ -3767,7 +3767,7 @@ function render() {
   h += sCard('Jogos', games.length, '#1B2B6B');
   h += sCard('Resultados', gamesWithResult, '#16A34A');
   h += sCard('Participantes', users.filter(function(u){return u.role!=='admin';}).length, '#2563EB');
-  h += sCard('Apostas', totalBets, '#D4A80F');
+  h += sCard('Palpites', totalBets, '#D4A80F');
   h += '</div>';
 
   // Tabs
@@ -3935,7 +3935,7 @@ function render() {
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
     h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">';
     h += '<thead><tr style="background:#F8F9FC;border-bottom:2px solid #DDE1EE;">';
-    ['#','Participante','Empresa','Pontos','Exatos','Vencedores','Apostas'].forEach(function(th){
+    ['#','Participante','Empresa','Pontos','Exatos','Vencedores','Palpites'].forEach(function(th){
       h += '<th style="padding:10px 14px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9CA3BF;text-align:left;white-space:nowrap;">'+th+'</th>';
     });
     h += '</tr></thead><tbody>';
@@ -4688,7 +4688,7 @@ SPA.pages["perfil"]={style:`.profile-header {
     h += statBox('Posição', myRank.position+(myRank.position!=='—'?'º':''), '#D4A80F');
     h += statBox('Pontos', myRank.totalPts, '#1B2B6B');
     h += statBox('Exatos', myRank.exactScores, '#16A34A');
-    h += statBox('Apostas', betCount, '#2563EB');
+    h += statBox('Palpites', betCount, '#2563EB');
     h += '</div></div>';
 
     // Right: edit profile + change password
@@ -4720,14 +4720,14 @@ SPA.pages["perfil"]={style:`.profile-header {
 
     // My bets history
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
-    h += '<div style="padding:14px 18px;border-bottom:1px solid #EEF0F6;font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:.9rem;text-transform:uppercase;color:#1B2B6B;letter-spacing:.5px;">📝 Histórico de Apostas</div>';
+    h += '<div style="padding:14px 18px;border-bottom:1px solid #EEF0F6;font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:.9rem;text-transform:uppercase;color:#1B2B6B;letter-spacing:.5px;">📝 Histórico de Palpites</div>';
 
     var games = DB.getGames();
     var bettedGames = games.filter(function(g){ return bets[g.id]; })
       .sort(function(a,b){ return new Date(b.date).getTime()-new Date(a.date).getTime(); });
 
     if (bettedGames.length === 0) {
-      h += '<div style="padding:32px;text-align:center;color:#9CA3BF;font-size:.85rem;">Você ainda não fez nenhuma aposta.</div>';
+      h += '<div style="padding:32px;text-align:center;color:#9CA3BF;font-size:.85rem;">Você ainda não fez nenhum palpite.</div>';
     } else {
       h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">';
       h += '<thead><tr style="background:#F8F9FC;border-bottom:1.5px solid #DDE1EE;">';
@@ -5212,8 +5212,8 @@ SPA.pages["regras"]={style:``,script:function(){
   [
     ['🎯','Placar exato','15 pts','Acertou o placar certinho: ex. 2×1','#16A34A'],
     ['✅','Vencedor correto','5 pts','Acertou quem ganhou (ou empate)','#2563EB'],
-    ['📊','Saldo de gols','3 pts','Ex. apostou 2×0, saiu 3×1 (saldo +2 nos dois)','#7C3AED'],
-    ['⚽','Gols de 1 time','2 pts','Ex. apostou 2×1, saiu 2×0 (acertou gols do home)','#EA580C'],
+    ['📊','Saldo de gols','3 pts','Ex. palpitou 2×0, saiu 3×1 (saldo +2 nos dois)','#7C3AED'],
+    ['⚽','Gols de 1 time','2 pts','Ex. palpitou 2×1, saiu 2×0 (acertou gols do home)','#EA580C'],
   ].forEach(function(row){
     h += '<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid #EEF0F6;">';
     h += '<span style="font-size:1.4rem;">'+row[0]+'</span>';
@@ -5280,11 +5280,11 @@ SPA.pages["regras"]={style:``,script:function(){
   h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:1rem;text-transform:uppercase;color:white;letter-spacing:.5px;">📋 Regras Gerais</div></div>';
   h += '<div style="padding:4px 0;">';
   [
-    ['⏰','Prazo para apostas','As apostas fecham <strong>1 hora antes</strong> do início de cada jogo. Após esse prazo não é possível alterar.'],
+    ['⏰','Prazo para apostas','Os palpites fecham <strong>1 hora antes</strong> do início de cada jogo. Após esse prazo não é possível alterar.'],
     ['🔒','Palpites Especiais','Devem ser feitos até <strong>10/06/2026 às 23h59</strong>. Após o início da Copa não é possível editar.'],
     ['📊','Desempate no Ranking','Em caso de empate em pontos: 1º mais placares exatos · 2º mais apostas feitas · 3º menor tempo médio de envio.'],
     ['🔄','Atualização','Os resultados são inseridos pelo administrador. A pontuação é calculada automaticamente após cada resultado.'],
-    ['👥','Participação','Aberto para colaboradores da Porter e Almah. Cada participante tem sua própria conta e histórico de apostas.'],
+    ['👥','Participação','Aberto para colaboradores da Porter e Almah. Cada participante tem sua própria conta e histórico de palpites.'],
     ['🎯','Palpite Especial Extra','Máximo de 16 times para os classificados às Oitavas. Cada acerto vale +5 pts (máx. 80 pts extras).'],
   ].forEach(function(rule){
     h += '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 18px;border-bottom:1px solid #EEF0F6;">';
@@ -5303,7 +5303,7 @@ SPA.pages["regras"]={style:``,script:function(){
   h += '→ Placar exato: <strong style="color:#16A34A">+15 pts</strong><br/>';
   h += '→ Multiplicador Final: <strong style="color:#16A34A">×3</strong><br/>';
   h += '→ Total: <strong style="color:#16A34A;font-size:1.1rem;">45 pts</strong> só neste jogo!<br/>';
-  h += '<br/>Se você também apostou no Brasil como campeão: <strong style="color:#16A34A">+50 pts</strong> extras.';
+  h += '<br/>Se você também palpitou no Brasil como campeão: <strong style="color:#16A34A">+50 pts</strong> extras.';
   h += '</div></div>';
 
   pc.innerHTML = h;
@@ -5370,7 +5370,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
 
     // Header
     h += '<div style="background:linear-gradient(135deg,#1B2B6B,#3D5AC8);border-radius:14px;padding:18px 24px;color:white;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">';
-    h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;">📋 Apostas do Dia</div>';
+    h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;">📋 Palpites do Dia</div>';
     h += '<div style="font-size:.82rem;opacity:.75;margin-top:2px;">'+displayLabel+'</div></div>';
     h += '<div style="display:flex;gap:12px;">';
     h += '<div style="text-align:center;background:rgba(255,255,255,.15);padding:8px 14px;border-radius:10px;">';
@@ -5444,7 +5444,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
 
       // Summary bar
       h += '<div style="padding:8px 16px;background:#F8F9FC;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;justify-content:space-between;">';
-      h += '<span style="font-size:.75rem;color:#5A6385;font-weight:600;">'+betters.length+' de '+users.length+' apostaram</span>';
+      h += '<span style="font-size:.75rem;color:#5A6385;font-weight:600;">'+betters.length+' de '+users.length+' palpitaram</span>';
       // Progress bar
       var pct = users.length > 0 ? Math.round(betters.length/users.length*100) : 0;
       h += '<div style="display:flex;align-items:center;gap:8px;">';
@@ -5455,7 +5455,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       h += '</div></div>';
 
       if (betters.length === 0) {
-        h += '<div style="padding:18px;text-align:center;font-size:.82rem;color:#9CA3BF;font-style:italic;">Nenhuma aposta registrada ainda para este jogo</div>';
+        h += '<div style="padding:18px;text-align:center;font-size:.82rem;color:#9CA3BF;font-style:italic;">Nenhum palpite registrada ainda para este jogo</div>';
       } else {
         // Table header
         h += '<div style="overflow-x:auto;max-height:400px;overflow-y:auto;">';
@@ -5512,7 +5512,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
             if (exact) h += ' <span style="font-size:.7rem;">🎯</span>';
           } else {
             // Hide palpite while game is open or not started — show only ✓
-            h += '<span style="font-size:.78rem;color:#16A34A;font-weight:700;">✓ Apostou</span>';
+            h += '<span style="font-size:.78rem;color:#16A34A;font-weight:700;">✓ Palpitou</span>';
           }
           h += '</td>';
 
@@ -5532,7 +5532,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       // Who hasn't bet yet (only show if game is still open)
       if (!isFinished && canBet && noBet.length > 0) {
         h += '<div style="padding:10px 16px;background:#FFF8F0;border-top:1px solid #FEE2A0;">';
-        h += '<span style="font-size:.72rem;font-weight:700;color:#92400E;">⏳ Ainda não apostaram ('+noBet.length+'): </span>';
+        h += '<span style="font-size:.72rem;font-weight:700;color:#92400E;">⏳ Ainda não palpitaram ('+noBet.length+'): </span>';
         h += '<span style="font-size:.72rem;color:#B45309;">'+noBet.slice(0,5).map(function(u){return u.name.split(' ')[0];}).join(', ')+(noBet.length>5?' e mais '+(noBet.length-5)+'...':'')+'</span>';
         h += '</div>';
       }
