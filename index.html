@@ -5662,7 +5662,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
   function render() {
     var games = DB.getGames();
     var allBets = DB.getBets();
-    var users = DB.getUsers().filter(function(u){ return u.role !== 'admin'; });
+    var users = DB.getUsers();
     var today = new Date();
     var todayStr = today.toISOString().slice(0,10);
 
