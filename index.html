@@ -5990,12 +5990,15 @@ async function initSupabase() {
       console.log('[Supabase] Loaded', users.length, 'users');
     }
 
-    // Load bets
-    var bets = await SB.get('bets', 'select=*');
+    // Load bets (via view bets_public: esconde placar de jogos não finalizados)
+    var bets = await SB.get('bets_public', 'select=*');
     if (bets) {
-      var betsObj = {};
+      // Parte do local para não perder o próprio palpite que a view esconde (jogo aberto)
+      var betsObj = DB.getBets() || {};
       bets.forEach(function(b) {
         if (!betsObj[b.user_email]) betsObj[b.user_email] = {};
+        // jogo ainda aberto (placar escondido): não apaga um palpite local existente
+        if (b.home_score === null && b.away_score === null && betsObj[b.user_email][b.game_id]) return;
         betsObj[b.user_email][b.game_id] = {
           home_score: b.home_score,
           away_score: b.away_score,
@@ -6128,7 +6131,8 @@ DB.saveBet = async function(userId, gameId, bet) {
 // Sync all bets from Supabase into localStorage
 window.syncBetsFromSupabase = async function() {
   try {
-    var res = await fetch(SUPABASE_URL + '/rest/v1/bets?select=*', {
+    // via view bets_public: esconde placar de jogos não finalizados
+    var res = await fetch(SUPABASE_URL + '/rest/v1/bets_public?select=*', {
       headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY}
     });
     if (!res.ok) return false;
@@ -6138,6 +6142,8 @@ window.syncBetsFromSupabase = async function() {
     // Merge Supabase bets (Supabase wins on conflict - it's the source of truth)
     bets.forEach(function(b) {
       if (!betsObj[b.user_email]) betsObj[b.user_email] = {};
+      // jogo ainda aberto (placar escondido pela view): não apaga um palpite local existente
+      if (b.home_score === null && b.away_score === null && betsObj[b.user_email][b.game_id]) return;
       betsObj[b.user_email][b.game_id] = {
         home_score: b.home_score,
         away_score: b.away_score,
