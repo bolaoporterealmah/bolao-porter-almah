@@ -665,9 +665,14 @@ tbody tr:last-child td { border-bottom: none; }
   <div style="display:flex;flex-direction:column;gap:14px;">
     <div><label style="display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2D3557;margin-bottom:5px;">E-mail</label>
       <input type="email" id="inp-email" placeholder="seu@email.com.br" style="width:100%;padding:10px 14px;border:1.5px solid #DDE1EE;border-radius:10px;font-size:.9rem;outline:none;font-family:inherit" autocomplete="email"/></div>
+    <div id="su-name-wrap" style="display:none;"><label style="display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2D3557;margin-bottom:5px;">Nome completo</label>
+      <input type="text" id="inp-name" placeholder="Nome Sobrenome" style="width:100%;padding:10px 14px;border:1.5px solid #DDE1EE;border-radius:10px;font-size:.9rem;outline:none;font-family:inherit" autocomplete="name"/></div>
+    <div id="su-company-wrap" style="display:none;"><label style="display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2D3557;margin-bottom:5px;">Empresa</label>
+      <input type="text" id="inp-company" placeholder="Porter / Almah" style="width:100%;padding:10px 14px;border:1.5px solid #DDE1EE;border-radius:10px;font-size:.9rem;outline:none;font-family:inherit" autocomplete="organization"/></div>
     <div><label style="display:block;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2D3557;margin-bottom:5px;">Senha</label>
       <input type="password" id="inp-password" placeholder="••••••••" style="width:100%;padding:10px 14px;border:1.5px solid #DDE1EE;border-radius:10px;font-size:.9rem;outline:none;font-family:inherit" autocomplete="current-password"/></div>
     <button id="btn-entrar" style="width:100%;padding:13px;background:#1B2B6B;color:white;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;">Entrar no Bolão ⚽</button>
+    <div style="text-align:center;font-size:.82rem;margin-top:2px;"><a id="link-toggle-mode" style="color:#1B2B6B;font-weight:700;cursor:pointer;">Criar uma conta →</a></div>
   </div>
   <div style="text-align:center;margin-top:18px;font-size:.75rem;color:#9CA3BF;">Acesso somente para colaboradores.<br/>Dúvidas? Fale com <strong style="color:#1B2B6B">RH Porter ou Almah</strong></div>
 </div></div></template>
@@ -754,13 +759,13 @@ const Auth = {
   user: null,
   init() {
     const raw = localStorage.getItem('bolao_user');
-    if (!raw) { window.location.href = 'login.html'; return false; }
+    if (!raw) { return false; }
     this.user = JSON.parse(raw);
     return true;
   },
   logout() {
-    localStorage.removeItem('bolao_user');
-    window.location.href = 'login.html';
+    Sess.clear();
+    SPA.navigate('login');
   },
   isAdmin() { return this.user?.role === 'admin'; }
 };
@@ -895,11 +900,11 @@ const Scoring = {
 const DB = {
   key: (k) => `bolao_${k}`,
 
-  get(k, def = null) {
-    try { const v = localStorage.getItem(this.key(k)); return v ? JSON.parse(v) : def; }
-    catch { return def; }
-  },
-  set(k, v) { localStorage.setItem(this.key(k), JSON.stringify(v)); },
+  // Store em MEMÓRIA (não persiste em localStorage). Tudo vem do Supabase a cada carregamento.
+  // localStorage guarda só login (bolao_session/bolao_user) e a flag bolao_synced_<email>.
+  _mem: {},
+  get(k, def = null) { var v = this._mem[k]; return v === undefined ? def : v; },
+  set(k, v) { this._mem[k] = v; },
 
   // Games
   getGames() { return this.get('games', DEFAULT_GAMES); },
@@ -957,40 +962,9 @@ const DB = {
 
   // Ranking
   getRanking() {
-    const games = this.getGames().filter(g => g.result);
-    const bets = this.getBets();
-    const users = this.getUsers();
-    const finalResults = this.getFinalResults();
-
-    return users.map(user => {
-      // Try email first (primary key), then id
-      const userBets = bets[user.email] || bets[user.id] || {};
-      let totalPts = 0, exactScores = 0, correctWinners = 0, betCount = 0;
-      let totalBetTime = 0;
-
-      games.forEach(game => {
-        const bet = userBets[game.id];
-        if (!bet || !game.result) return;
-        betCount++;
-        const sc = Scoring.calculate(bet, { ...game.result, phase: game.phase });
-        totalPts += sc.total;
-        if (sc.breakdown.find(b => b.label === 'Placar exato')) exactScores++;
-        if (sc.breakdown.find(b => b.label === 'Acertou vencedor' || b.label === 'Acertou empate')) correctWinners++;
-        totalBetTime += bet.savedAt || 0;
-      });
-
-      const specials = this.getUserSpecials(user.email || user.id);
-      if (finalResults) totalPts += Scoring.calculateSpecials(specials, finalResults);
-
-      const avgBetTime = betCount > 0 ? Math.round(totalBetTime / betCount) : 0;
-      return { ...user, totalPts, exactScores, correctWinners, betCount, avgBetTime };
-    }).sort((a,b) => {
-      if (b.totalPts !== a.totalPts) return b.totalPts - a.totalPts;
-      if (b.exactScores !== a.exactScores) return b.exactScores - a.exactScores;
-      if (b.correctWinners !== a.correctWinners) return b.correctWinners - a.correctWinners;
-      if (b.betCount !== a.betCount) return b.betCount - a.betCount;
-      return a.avgBetTime - b.avgBetTime;
-    }).map((u, i) => ({ ...u, position: i + 1 }));
+    // Calculado no servidor (RPC public.ranking) e cacheado por syncRankingFromSupabase.
+    // Nunca usa palpite alheio cru no cliente.
+    return this.get('ranking', []);
   }
 };
 
@@ -2562,7 +2536,7 @@ var SPA={
         h+='<a class="nav-item'+(page==='admin'?' active':'')+'" data-nav="admin" style="cursor:pointer"><span class="nav-icon">⚽</span> Gerenciar Jogos</a>';
         h+='<a class="nav-item'+(page==='config'?' active':'')+'" data-nav="config" style="cursor:pointer"><span class="nav-icon">⚙️</span> Configurações</a>';
       }
-      h+='</nav><div class="sidebar-footer"><div class="sidebar-user"><div class="sidebar-avatar">'+(user.initials||'?')+'</div><div class="sidebar-user-info"><div class="name">'+(user.name||'')+'</div><div class="company">'+(user.company||'')+'</div></div></div></div>';
+      h+='</nav><div class="sidebar-footer"><div class="sidebar-user"><div class="sidebar-avatar">'+(user.initials||'?')+'</div><div class="sidebar-user-info"><div class="name">'+(esc(user.name)||'')+'</div><div class="company">'+(esc(user.company)||'')+'</div></div></div></div>';
       sb.innerHTML=h;
       sb.addEventListener('click',function(e){var a=e.target.closest('[data-nav]');if(a)SPA.navigate(a.getAttribute('data-nav'));});
     }
@@ -2584,7 +2558,7 @@ var SPA={
     }
   }
 ,
-  logout:function(){localStorage.removeItem('bolao_user');this.navigate('login');}
+  logout:function(){Sess.clear();this.navigate('login');}
 };
 SPA.pages["login"]={style:`.login-bg {
   position: fixed; inset: 0;
@@ -2691,104 +2665,58 @@ SPA.pages["login"]={style:`.login-bg {
 #loginForm { display: flex; flex-direction: column; gap: 0; }`,script:function(){
 
 (function(){
-  var USERS=[
-    {id:'u0',email:'leticia.coral@portergroup.com.br',password:'123456',name:'Leticia Coral',role:'admin',company:'Porter',initials:'LC'},
-    {id:'u1',email:'admin@porter.com.br',password:'admin123',name:'Admin Porter',role:'admin',company:'Porter',initials:'AP'},
-    {id:'u2',email:'joao@porter.com.br',password:'123456',name:'João Silva',role:'participant',company:'Porter',initials:'JS'},
-    {id:'u3',email:'ana@almah.com.br',password:'123456',name:'Ana Costa',role:'participant',company:'Almah',initials:'AC'},
-    {id:'u4',email:'carlos@porter.com.br',password:'123456',name:'Carlos Mendes',role:'participant',company:'Porter',initials:'CM'}
-  ];
-  if(localStorage.getItem('bolao_user')){SPA.navigate('dashboard');return;}
-  async function tryLogin(){
-    var emailEl = document.getElementById('inp-email');
-    var passEl  = document.getElementById('inp-password');
-    var btnEl   = document.getElementById('btn-entrar');
-    var errEl   = document.getElementById('login-error');
-    if (!emailEl || !passEl) return;
+  if(Sess.get()){SPA.navigate('dashboard');return;}
+  // ── Login / Cadastro via Supabase Auth ──────────────────────────────
+  var mode='login';
+  var emailEl=document.getElementById('inp-email');
+  var passEl=document.getElementById('inp-password');
+  var nameEl=document.getElementById('inp-name');
+  var compEl=document.getElementById('inp-company');
+  var btnEl=document.getElementById('btn-entrar');
+  var errEl=document.getElementById('login-error');
+  var linkEl=document.getElementById('link-toggle-mode');
+  var nameWrap=document.getElementById('su-name-wrap');
+  var compWrap=document.getElementById('su-company-wrap');
 
-    var email = emailEl.value.trim().toLowerCase();
-    var pass  = passEl.value.trim();
-    if (!email || !pass) {
-      if (errEl) { errEl.textContent = '⚠️ Preencha e-mail e senha.'; errEl.style.display='block'; }
-      return;
-    }
-
-    if (btnEl) { btnEl.textContent = '🔄 Verificando...'; btnEl.disabled = true; }
-    var found = null;
-
-    // ── 1. Hardcoded admins (always work) ───────────────────────────────────
-    for (var i=0; i<USERS.length; i++) {
-      if (USERS[i].email === email && USERS[i].password === pass) {
-        found = USERS[i]; break;
+  function showErr(msg){ if(errEl){ errEl.textContent='⚠️ '+msg; errEl.style.display='block'; } }
+  function clearErr(){ if(errEl) errEl.style.display='none'; }
+  function setMode(m){
+    mode=m; clearErr();
+    var su=(m==='signup');
+    if(nameWrap) nameWrap.style.display=su?'block':'none';
+    if(compWrap) compWrap.style.display=su?'block':'none';
+    if(passEl) passEl.setAttribute('autocomplete', su?'new-password':'current-password');
+    if(btnEl) btnEl.textContent=su?'Criar conta ⚽':'Entrar no Bolão ⚽';
+    if(linkEl) linkEl.textContent=su?'← Já tenho conta':'Criar uma conta →';
+  }
+  async function submit(){
+    clearErr();
+    var email=((emailEl&&emailEl.value)||'').trim().toLowerCase();
+    var pass=((passEl&&passEl.value)||'').trim();
+    if(!email||!pass){ showErr('Preencha e-mail e senha.'); return; }
+    if(mode==='signup' && pass.length<6){ showErr('A senha deve ter ao menos 6 caracteres.'); return; }
+    if(btnEl){ btnEl.disabled=true; btnEl.textContent='🔄 Aguarde...'; }
+    try{
+      if(mode==='signup'){
+        var name=((nameEl&&nameEl.value)||'').trim();
+        if(!name){ showErr('Informe seu nome.'); if(btnEl){btnEl.disabled=false;} setMode('signup'); return; }
+        var company=((compEl&&compEl.value)||'').trim()||'Porter';
+        var initials=name.split(' ').slice(0,2).map(function(n){return n[0];}).join('').toUpperCase();
+        await sbSignup(email,pass,{name:name,company:company,initials:initials});
+      } else {
+        await sbLogin(email,pass);
       }
+      SPA.navigate('dashboard');
+    }catch(e){
+      showErr((e&&e.message)||'Falha. Verifique os dados.');
+      if(btnEl){ btnEl.disabled=false; }
+      setMode(mode);
     }
-
-    // ── 2. Supabase lookup ──────────────────────────────────────────────────
-    if (!found) {
-      try {
-        var sbUrl = 'https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/users?email=eq.' + encodeURIComponent(email) + '&select=*&limit=1';
-        var res = await fetch(sbUrl, {
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts',
-            'Content-Type': 'application/json'
-          }
-        });
-        if (res.ok) {
-          var rows = await res.json();
-          if (rows && rows.length > 0) {
-            var u = rows[0];
-            if (u.password === pass) {
-              found = {
-                id: u.id, name: u.name, email: u.email,
-                company: u.company || 'Porter', role: u.role || 'participant',
-                password: u.password,
-                initials: u.initials || u.name.split(' ').slice(0,2).map(function(w){return w[0];}).join('').toUpperCase()
-              };
-              // Cache in localStorage so next login is faster
-              var cached = DB.getUsers();
-              if (!cached.find(function(x){return x.email===found.email;})) {
-                cached.push(found); DB.saveUsers(cached);
-              }
-            }
-          }
-        }
-      } catch(e) { console.warn('[Login] Supabase unavailable:', e.message); }
-    }
-
-    // ── 3. localStorage fallback ────────────────────────────────────────────
-    if (!found) {
-      var cached = DB.getUsers();
-      for (var j=0; j<cached.length; j++) {
-        var u = cached[j];
-        if (u.email === email && (u.password === pass || u.senha === pass)) {
-          found = u; break;
-        }
-      }
-    }
-
-    // ── Result ──────────────────────────────────────────────────────────────
-    if (btnEl) { btnEl.textContent = 'Entrar no Bolão ⚽'; btnEl.disabled = false; }
-
-    if (!found) {
-      if (errEl) {
-        errEl.innerHTML = '⚠️ E-mail ou senha incorretos.<br><span style="font-size:.75rem;opacity:.8;">Senha padrão: <strong>123456</strong></span>';
-        errEl.style.display = 'block';
-      }
-      return;
-    }
-
-    var all = DB.getUsers();
-    if (!all.find(function(u){return u.email===found.email;})) {
-      all.unshift(found); DB.saveUsers(all);
-    }
-    localStorage.setItem('bolao_user', JSON.stringify(found));
-    SPA.navigate('dashboard');
-  }  // end tryLogin
-  var btn=document.getElementById('btn-entrar'),inp=document.getElementById('inp-password'),inpE=document.getElementById('inp-email');
-  if(btn)btn.addEventListener('click',tryLogin);
-  if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
-  if(inpE)inpE.addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+  }
+  if(btnEl) btnEl.addEventListener('click',submit);
+  if(linkEl) linkEl.addEventListener('click',function(){ setMode(mode==='login'?'signup':'login'); });
+  [emailEl,passEl,nameEl,compEl].forEach(function(el){ if(el) el.addEventListener('keydown',function(ev){ if(ev.key==='Enter') submit(); }); });
+  setMode('login');
 })();
 
 }};
@@ -2820,7 +2748,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
     // Hero banner
     h += '<div style="background:linear-gradient(135deg,#1B2B6B 0%,#3D5AC8 100%);border-radius:16px;padding:22px 26px;color:white;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;position:relative;overflow:hidden;">';
     h += '<div style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:120px;opacity:.06;">🏆</div>';
-    h += '<div><div style="font-size:.78rem;opacity:.7;margin-bottom:4px;">Olá, '+user.name.split(' ')[0]+' 👋</div>';
+    h += '<div><div style="font-size:.78rem;opacity:.7;margin-bottom:4px;">Olá, '+esc(user.name).split(' ')[0]+' 👋</div>';
     h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;line-height:1.1;">Copa do Mundo<br/>FIFA 2026</div>';
     h += '<div style="font-size:.78rem;opacity:.6;margin-top:4px;">USA · Canada · México &nbsp;|&nbsp; Porter & Almah</div></div>';
     h += '<div style="display:flex;gap:10px;flex-shrink:0;">';
@@ -2858,9 +2786,9 @@ SPA.pages["dashboard"]={style:``,script:function(){
       var posColor = r.position<=3?'white':'#5A6385';
       h += '<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #EEF0F6;">';
       h += '<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;background:'+posBg+';color:'+posColor+';flex-shrink:0;">'+r.position+'</div>';
-      h += '<div style="width:28px;height:28px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;color:white;flex-shrink:0;">'+r.initials+'</div>';
-      h += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.name+(isMe?' <span style="font-size:.58rem;color:#3D5AC8">(você)</span>':'')+'</div>';
-      h += '<div style="font-size:.65rem;color:#9CA3BF;">'+r.company+'</div></div>';
+      h += '<div style="width:28px;height:28px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;color:white;flex-shrink:0;">'+esc(r.initials)+'</div>';
+      h += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.name)+(isMe?' <span style="font-size:.58rem;color:#3D5AC8">(você)</span>':'')+'</div>';
+      h += '<div style="font-size:.65rem;color:#9CA3BF;">'+esc(r.company)+'</div></div>';
       h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.05rem;font-weight:900;color:#1B2B6B;">'+r.totalPts+'</div></div>';
     });
     h += '</div></div>';
@@ -2913,7 +2841,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
     // Stats bar
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:18px;">';
     var leader=ranking[0];
-    [{icon:'🥇',val:leader?leader.name.split(' ')[0]:'—',lbl:'Líder'},{icon:'🎯',val:Math.max.apply(null,[0].concat(ranking.map(function(r){return r.exactScores;}))),lbl:'Mais Exatos'},{icon:'⚽',val:finishedGames.length,lbl:'Computados'},{icon:'👥',val:ranking.length,lbl:'Participantes'}].forEach(function(s){
+    [{icon:'🥇',val:leader?esc(leader.name).split(' ')[0]:'—',lbl:'Líder'},{icon:'🎯',val:Math.max.apply(null,[0].concat(ranking.map(function(r){return r.exactScores;}))),lbl:'Mais Exatos'},{icon:'⚽',val:finishedGames.length,lbl:'Computados'},{icon:'👥',val:ranking.length,lbl:'Participantes'}].forEach(function(s){
       h += '<div style="background:white;border-radius:12px;border:1px solid #DDE1EE;padding:11px 14px;display:flex;align-items:center;gap:10px;">';
       h += '<span style="font-size:1.5rem;">'+s.icon+'</span>';
       h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.15rem;font-weight:900;color:#1B2B6B;line-height:1;">'+s.val+'</div>';
@@ -3631,8 +3559,8 @@ SPA.pages["ranking"]={style:``,script:function(){
     var games = DB.getGames().filter(function(g){ return g.result && !g.tbd; });
     var myRank = ranking.find(function(r){ return r.email === user.email; }) || {position:'—',totalPts:0,exactScores:0,betCount:0};
     var companies = [];
-    ranking.forEach(function(r){ if(companies.indexOf(r.company)<0) companies.push(r.company); });
-    var filtered = filterCompany==='all' ? ranking : ranking.filter(function(r){ return r.company===filterCompany; });
+    ranking.forEach(function(r){ if(companies.indexOf(esc(r.company))<0) companies.push(esc(r.company)); });
+    var filtered = filterCompany==='all' ? ranking : ranking.filter(function(r){ return esc(r.company)===filterCompany; });
 
     // Build detailed stats per user from bets
     var statsMap = {};
@@ -3687,9 +3615,9 @@ SPA.pages["ranking"]={style:``,script:function(){
         var orders = {1:'0',2:'-1',3:'1'};
         return '<div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;max-width:140px;order:'+orders[pos]+'">' +
           (pos===1?'<div style="font-size:1.1rem;">👑</div>':'') +
-          '<div style="width:42px;height:42px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.85rem;">'+r.initials+'</div>' +
-          '<div style="font-size:.78rem;font-weight:700;text-align:center;">'+r.name.split(' ')[0]+'</div>' +
-          '<div style="font-size:.65rem;color:#9CA3BF;">'+r.company+'</div>' +
+          '<div style="width:42px;height:42px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.85rem;">'+esc(r.initials)+'</div>' +
+          '<div style="font-size:.78rem;font-weight:700;text-align:center;">'+esc(r.name).split(' ')[0]+'</div>' +
+          '<div style="font-size:.65rem;color:#9CA3BF;">'+esc(r.company)+'</div>' +
           '<div style="width:100%;background:'+bgs[pos]+';border-radius:8px 8px 0 0;height:'+heights[pos]+';display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:8px;">' +
           '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:.88rem;font-weight:800;color:rgba(0,0,0,.4);">'+r.totalPts+' pts</div>' +
           '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.6rem;font-weight:900;color:rgba(0,0,0,.22);">'+pos+'</div>' +
@@ -3733,9 +3661,9 @@ SPA.pages["ranking"]={style:``,script:function(){
 
       h += '<td style="padding:10px 12px;">';
       h += '<div style="display:flex;align-items:center;gap:8px;">';
-      h += '<div style="width:30px;height:30px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;color:white;flex-shrink:0;">'+r.initials+'</div>';
-      h += '<div><div style="font-weight:600;font-size:.85rem;">'+r.name+(isMe?' <span style="font-size:.6rem;color:#3D5AC8">(você)</span>':'')+'</div>';
-      h += '<div style="font-size:.68rem;color:#9CA3BF;">'+r.company+'</div></div></div>';
+      h += '<div style="width:30px;height:30px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;color:white;flex-shrink:0;">'+esc(r.initials)+'</div>';
+      h += '<div><div style="font-weight:600;font-size:.85rem;">'+esc(r.name)+(isMe?' <span style="font-size:.6rem;color:#3D5AC8">(você)</span>':'')+'</div>';
+      h += '<div style="font-size:.68rem;color:#9CA3BF;">'+esc(r.company)+'</div></div></div>';
       h += '</td>';
 
       // 🎯 Exatos
@@ -3832,16 +3760,16 @@ SPA.pages["palpites"]={style:``,script:function(){
       saveBtn.textContent = '⏳ Salvando...';
       saveBtn.disabled = true;
       var data = { champion:sel.champion, runner_up:sel.runner_up, third:sel.third, qualified:sel.qualified };
-      // Save localStorage immediately
-      var ls = JSON.parse(localStorage.getItem('bolao_specials')||'{}');
+      // Cache em memória (só o próprio); verdade vai pro Supabase
+      var ls = DB.get('specials', {}) || {};
       ls[user.email] = data;
-      localStorage.setItem('bolao_specials', JSON.stringify(ls));
+      DB.set('specials', ls);
       // Save Supabase async
       (async function(){
         try {
           var r = await fetch('https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/specials?on_conflict=user_email',{
             method:'POST',
-            headers:{'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts','Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+            headers:Object.assign({},Sess.headers(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
             body:JSON.stringify({user_email:user.email,champion:data.champion||null,runner_up:data.runner_up||null,third:data.third||null,qualified:data.qualified||[]})
           });
           if(r.ok){ Utils.toast('Palpites salvos! ✓','success'); }
@@ -4045,11 +3973,8 @@ SPA.pages["palpites"]={style:``,script:function(){
   (async function() {
     // Load directly from Supabase
     try {
-      var sbRes = await fetch('https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/specials?user_email=eq.' + encodeURIComponent(user.email) + '&select=*&limit=1', {
-        headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts'
-        }
+      var sbRes = await fetch(SUPABASE_URL + '/rest/v1/specials?user_email=eq.' + encodeURIComponent(user.email) + '&select=*&limit=1', {
+        headers: Sess.headers(false)
       });
       if (sbRes.ok) {
         var sbData = await sbRes.json();
@@ -4059,15 +3984,15 @@ SPA.pages["palpites"]={style:``,script:function(){
           sel.runner_up = saved.runner_up || '';
           sel.third     = saved.third     || '';
           sel.qualified = saved.qualified || [];
-          // Also update localStorage
-          var s = JSON.parse(localStorage.getItem('bolao_specials') || '{}');
+          // Cache em memória
+          var s = DB.get('specials', {}) || {};
           s[user.email] = {champion: sel.champion, runner_up: sel.runner_up, third: sel.third, qualified: sel.qualified};
-          localStorage.setItem('bolao_specials', JSON.stringify(s));
+          DB.set('specials', s);
         }
       }
     } catch(e) {
-      // Fallback to localStorage
-      var localSaved = JSON.parse(localStorage.getItem('bolao_specials') || '{}');
+      // Fallback ao cache em memória
+      var localSaved = DB.get('specials', {}) || {};
       var myLocal = localSaved[user.email] || {};
       if (myLocal.champion)  sel.champion  = myLocal.champion;
       if (myLocal.runner_up) sel.runner_up = myLocal.runner_up;
@@ -4258,9 +4183,9 @@ function render() {
     users.forEach(function(u, idx){
       h += '<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;'+(idx<users.length-1?'border-bottom:1px solid #EEF0F6;':'')+'">';
       h += '<div style="width:38px;height:38px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.85rem;flex-shrink:0;">'+u.initials+'</div>';
-      h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;">'+u.name+'</div>';
-      h += '<div style="font-size:.72rem;color:#9CA3BF;">'+u.email+'</div></div>';
-      h += '<span style="background:'+(u.company==='Porter'?'rgba(27,43,107,.1)':'rgba(245,197,24,.2)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+u.company+'</span>';
+      h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;">'+esc(u.name)+'</div>';
+      h += '<div style="font-size:.72rem;color:#9CA3BF;">'+esc(u.email)+'</div></div>';
+      h += '<span style="background:'+(u.company==='Porter'?'rgba(27,43,107,.1)':'rgba(245,197,24,.2)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+esc(u.company)+'</span>';
       h += '<span style="background:'+(u.role==='admin'?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)')+';color:'+(u.role==='admin'?'#DC2626':'#16A34A')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+u.role+'</span>';
       h += '<button data-deleteuser="'+u.id+'" style="padding:5px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#DC2626;">🗑️</button>';
       h += '</div>';
@@ -4286,8 +4211,8 @@ function render() {
       var posColor = r.position<=3?'white':'#5A6385';
       h += '<tr style="border-bottom:1px solid #EEF0F6;">';
       h += '<td style="padding:11px 14px;"><div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;background:'+posBg+';color:'+posColor+';">'+r.position+'</div></td>';
-      h += '<td style="padding:11px 14px;"><div style="display:flex;align-items:center;gap:8px;"><div style="width:30px;height:30px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;color:white;">'+r.initials+'</div><div><div style="font-weight:600;font-size:.85rem;">'+r.name+'</div></div></div></td>';
-      h += '<td style="padding:11px 14px;font-size:.82rem;">'+r.company+'</td>';
+      h += '<td style="padding:11px 14px;"><div style="display:flex;align-items:center;gap:8px;"><div style="width:30px;height:30px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;color:white;">'+esc(r.initials)+'</div><div><div style="font-weight:600;font-size:.85rem;">'+esc(r.name)+'</div></div></div></td>';
+      h += '<td style="padding:11px 14px;font-size:.82rem;">'+esc(r.company)+'</td>';
       h += '<td style="padding:11px 14px;font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;font-weight:900;color:#1B2B6B;">'+r.totalPts+'</td>';
       h += '<td style="padding:11px 14px;font-size:.85rem;color:#5A6385;">'+r.exactScores+'</td>';
       h += '<td style="padding:11px 14px;font-size:.85rem;color:#5A6385;">'+r.correctWinners+'</td>';
@@ -4577,19 +4502,25 @@ function openUserModal() {
 
   document.getElementById('closeUserModal').addEventListener('click', function(){modal.remove();});
   document.getElementById('cancelUserModal').addEventListener('click', function(){modal.remove();});
-  document.getElementById('saveUserModal').addEventListener('click', function(){
+  document.getElementById('saveUserModal').addEventListener('click', async function(){
     var name=document.getElementById('nuName').value.trim();
-    var email=document.getElementById('nuEmail').value.trim();
+    var email=document.getElementById('nuEmail').value.trim().toLowerCase();
     var pass=document.getElementById('nuPass').value.trim()||'123456';
     var company=document.getElementById('nuCompany').value;
     if(!name||!email){Utils.toast('Nome e e-mail são obrigatórios','error');return;}
-    var users=DB.getUsers();
-    if(users.find(function(u){return u.email===email;})){Utils.toast('E-mail já cadastrado','error');return;}
+    if(pass.length<6){Utils.toast('Senha inicial precisa de 6+ caracteres','error');return;}
     var initials=name.split(' ').slice(0,2).map(function(n){return n[0];}).join('').toUpperCase();
-    users.push({id:'u_'+Date.now(),name:name,email:email,company:company,role:'participant',initials:initials,password:pass});
-    DB.saveUsers(users);
-    Utils.toast(name+' cadastrado(a)! ✓','success');
-    modal.remove(); render();
+    var b=document.getElementById('saveUserModal'); b.disabled=true; b.textContent='Cadastrando...';
+    try{
+      await sbCreateUser(email,pass,{name:name,company:company,role:'participant',initials:initials});
+      Utils.toast(name+' cadastrado(a)! ✓','success');
+      modal.remove();
+      if(window.syncProfilesFromSupabase) await syncProfilesFromSupabase();
+      render();
+    }catch(e){
+      b.disabled=false; b.textContent='Cadastrar';
+      Utils.toast(/registered|already|exists/i.test(e.message)?'E-mail já cadastrado':('Erro: '+e.message),'error');
+    }
   });
   modal.addEventListener('click', function(e){if(e.target===modal)modal.remove();});
 }
@@ -4598,7 +4529,7 @@ function openUserModal() {
 function exportCsv() {
   var ranking = DB.getRanking();
   var csv = 'Posição,Nome,Empresa,Pontos,Exatos,Vencedores,Palpites\n'+
-    ranking.map(function(r){return r.position+',"'+r.name+'","'+r.company+'",'+r.totalPts+','+r.exactScores+','+r.correctWinners+','+r.betCount;}).join('\n');
+    ranking.map(function(r){return r.position+',"'+esc(r.name)+'","'+esc(r.company)+'",'+r.totalPts+','+r.exactScores+','+r.correctWinners+','+r.betCount;}).join('\n');
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a'); a.href=url; a.download='ranking-copa2026.csv'; a.click();
@@ -4905,7 +4836,7 @@ SPA.pages["hall"]={style:`.hall-hero {
     h += '<div style="padding:16px;text-align:center;">';
     if (aw.person && copa_started) {
       h += '<div style="width:44px;height:44px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;margin:0 auto 8px;font-size:.9rem;">'+aw.person.initials+'</div>';
-      h += '<div style="font-weight:800;font-size:.95rem;color:#2D3557;">'+aw.person.name+'</div>';
+      h += '<div style="font-weight:800;font-size:.95rem;color:#2D3557;">'+esc(aw.person.name)+'</div>';
       h += '<div style="font-size:.72rem;color:#9CA3BF;margin-bottom:6px;">'+aw.person.company+'</div>';
       h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;color:#1B2B6B;">'+aw.val+'</div>';
     } else {
@@ -4923,8 +4854,8 @@ SPA.pages["hall"]={style:`.hall-hero {
   if (bestRound.user && copa_started) {
     h += '<div style="display:flex;align-items:center;gap:14px;">';
     h += '<div style="width:48px;height:48px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;">'+bestRound.user.initials+'</div>';
-    h += '<div style="flex:1;"><div style="font-weight:700;font-size:.9rem;">'+bestRound.user.name+'</div>';
-    h += '<div style="font-size:.72rem;color:#9CA3BF;">'+bestRound.user.company+' · '+flag(bestRound.game.home)+' '+bestRound.game.home+' × '+bestRound.game.away+' '+flag(bestRound.game.away)+'</div></div>';
+    h += '<div style="flex:1;"><div style="font-weight:700;font-size:.9rem;">'+esc(bestRound.user.name)+'</div>';
+    h += '<div style="font-size:.72rem;color:#9CA3BF;">'+bestRound.esc(user.company)+' · '+flag(bestRound.game.home)+' '+bestRound.game.home+' × '+bestRound.game.away+' '+flag(bestRound.game.away)+'</div></div>';
     h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:2rem;font-weight:900;color:#1B2B6B;">+'+bestRound.pts+' pts</div>';
     h += '</div>';
   } else {
@@ -4950,10 +4881,10 @@ SPA.pages["hall"]={style:`.hall-hero {
   medals.forEach(function(m, i){
     h += '<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #EEF0F6;border-right:'+(i%2===0?'1px solid #EEF0F6':'none')+';">';
     h += '<span style="font-size:1.8rem;flex-shrink:0;">'+m.icon+'</span>';
-    h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;color:#2D3557;">'+m.name+'</div>';
+    h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;color:#2D3557;">'+esc(m.name)+'</div>';
     h += '<div style="font-size:.72rem;color:#9CA3BF;">'+m.desc+'</div></div>';
     if (m.holder) {
-      h += '<div style="text-align:right;"><div style="font-size:.78rem;font-weight:700;color:#1B2B6B;">'+m.holder.name.split(' ')[0]+'</div></div>';
+      h += '<div style="text-align:right;"><div style="font-size:.78rem;font-weight:700;color:#1B2B6B;">'+esc(m.holder.name).split(' ')[0]+'</div></div>';
     } else {
       h += '<span style="background:#EEF0F6;border-radius:99px;padding:3px 10px;font-size:.68rem;color:#9CA3BF;font-weight:600;">⏳</span>';
     }
@@ -5022,9 +4953,9 @@ SPA.pages["perfil"]={style:`.profile-header {
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
     h += '<div style="background:linear-gradient(135deg,#1B2B6B,#3D5AC8);padding:24px;text-align:center;">';
     h += '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;color:white;margin:0 auto 12px;">'+user.initials+'</div>';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;text-transform:uppercase;color:white;">'+user.name+'</div>';
-    h += '<div style="font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px;">'+user.email+'</div>';
-    h += '<span style="display:inline-block;margin-top:8px;padding:3px 12px;background:rgba(255,255,255,.15);border-radius:99px;font-size:.72rem;color:white;font-weight:600;">'+user.company+'</span>';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;text-transform:uppercase;color:white;">'+esc(user.name)+'</div>';
+    h += '<div style="font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px;">'+esc(user.email)+'</div>';
+    h += '<span style="display:inline-block;margin-top:8px;padding:3px 12px;background:rgba(255,255,255,.15);border-radius:99px;font-size:.72rem;color:white;font-weight:600;">'+esc(user.company)+'</span>';
     h += '</div>';
     h += '<div style="padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += statBox('Posição', myRank.position+(myRank.position!=='—'?'º':''), '#D4A80F');
@@ -5039,11 +4970,11 @@ SPA.pages["perfil"]={style:`.profile-header {
     // Edit profile
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:20px;">';
     h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.9rem;text-transform:uppercase;color:#1B2B6B;letter-spacing:.5px;margin-bottom:14px;">✏️ Editar Perfil</div>';
-    h += fld('Nome', 'pf-name', user.name, 'text');
+    h += fld('Nome', 'pf-name', esc(user.name), 'text');
     h += '<div style="margin-bottom:12px;"><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Empresa</label>';
     h += '<select id="pf-company" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;background:white;">';
-    h += '<option'+(user.company==='Porter'?' selected':'')+'>Porter</option>';
-    h += '<option'+(user.company==='Almah'?' selected':'')+'>Almah</option>';
+    h += '<option'+(esc(user.company)==='Porter'?' selected':'')+'>Porter</option>';
+    h += '<option'+(esc(user.company)==='Almah'?' selected':'')+'>Almah</option>';
     h += '</select></div>';
     h += '<button id="btn-save-profile" style="width:100%;padding:10px;background:#1B2B6B;color:white;border:none;border-radius:9px;font-weight:700;font-size:.88rem;cursor:pointer;">💾 Salvar Perfil</button>';
     h += '</div>';
@@ -5151,58 +5082,43 @@ SPA.pages["perfil"]={style:`.profile-header {
       localStorage.setItem('bolao_user', JSON.stringify(updated));
       Auth.user = updated;
       user = updated;
-      // Update in Supabase
-      fetch('https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/users?email=eq.'+encodeURIComponent(user.email), {
-        method: 'PATCH',
-        headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({name:name, company:company, initials:initials})
+      // Update no Supabase (profiles, autenticado via JWT — RLS exige ser o dono)
+      Sess.ensure().then(function(){
+        fetch(SUPABASE_URL+'/rest/v1/profiles?id=eq.'+encodeURIComponent(user.id), {
+          method: 'PATCH',
+          headers: Sess.headers(),
+          body: JSON.stringify({name:name, company:company, initials:initials})
+        });
       });
       Utils.toast('Perfil atualizado! ✓','success');
       render();
     });
 
-    // Change password
+    // Change password (via Supabase Auth — a sessão JWT prova a identidade)
     var pwBtn = document.getElementById('btn-change-pw');
     if (pwBtn) pwBtn.addEventListener('click', async function() {
-      var current = (document.getElementById('pw-current')||{}).value||'';
       var novo = (document.getElementById('pw-new')||{}).value||'';
       var confirm = (document.getElementById('pw-confirm')||{}).value||'';
 
-      if (!current || !novo || !confirm) { showMsg('Preencha todos os campos','error'); return; }
-      if (novo.length < 4) { showMsg('A nova senha deve ter pelo menos 4 caracteres','error'); return; }
+      if (!novo || !confirm) { showMsg('Preencha a nova senha e a confirmação','error'); return; }
+      if (novo.length < 6) { showMsg('A nova senha deve ter pelo menos 6 caracteres','error'); return; }
       if (novo !== confirm) { showMsg('A nova senha e a confirmação não coincidem','error'); return; }
 
-      // Verify current password against Supabase
       try {
-        var K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts';
-        var H = {'apikey':K,'Authorization':'Bearer '+K,'Content-Type':'application/json'};
-        var checkRes = await fetch('https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/users?email=eq.'+encodeURIComponent(user.email)+'&select=password', {headers:H});
-        var checkData = await checkRes.json();
-        if (!checkData || !checkData[0] || checkData[0].password !== current) {
-          showMsg('Senha atual incorreta','error'); return;
-        }
-        // Update password
-        var updateRes = await fetch('https://ldygmzsqjoxlxtrdgstv.supabase.co/rest/v1/users?email=eq.'+encodeURIComponent(user.email), {
-          method: 'PATCH', headers: H,
+        await Sess.ensure();
+        var r = await fetch(SUPABASE_URL+'/auth/v1/user', {
+          method: 'PUT', headers: Sess.headers(),
           body: JSON.stringify({password: novo})
         });
-        if (updateRes.ok) {
-          // Update local storage too
-          var updated = Object.assign({}, user, {password: novo});
-          localStorage.setItem('bolao_user', JSON.stringify(updated));
-          Auth.user = updated;
-          user = updated;
-          document.getElementById('pw-current').value='';
+        var d = await r.json();
+        if (r.ok) {
+          var cur = document.getElementById('pw-current'); if (cur) cur.value='';
           document.getElementById('pw-new').value='';
           document.getElementById('pw-confirm').value='';
           showMsg('✅ Senha alterada com sucesso!','success');
           Utils.toast('Senha alterada! ✓','success');
         } else {
-          showMsg('Erro ao atualizar senha. Tente novamente.','error');
+          showMsg(d.msg || d.error_description || 'Erro ao atualizar senha.','error');
         }
       } catch(e) { showMsg('Erro: '+e.message,'error'); }
     });
@@ -5230,13 +5146,13 @@ function render() {
   h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:20px;max-width:460px;">';
   h += '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">';
   h += '<div style="width:56px;height:56px;border-radius:50%;background:#1B2B6B;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:1.1rem;">'+user.initials+'</div>';
-  h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;text-transform:uppercase;">' + user.name + '</div>';
+  h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;text-transform:uppercase;">' + esc(user.name) + '</div>';
   h += '<div style="font-size:.78rem;color:#9CA3BF;">' + user.email + '</div>';
   h += '<span style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:' + (user.role==='admin'?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)') + ';color:' + (user.role==='admin'?'#DC2626':'#16A34A') + ';">' + (user.role==='admin'?'Administrador':'Participante') + '</span>';
   h += '</div></div>';
   h += '<div style="display:flex;flex-direction:column;gap:12px;">';
-  h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Nome</label><input class="form-input" id="cfgName" value="' + user.name.replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
-  h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Empresa</label><select id="cfgCompany" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;background:white;"><option' + (user.company==='Porter'?' selected':'') + '>Porter</option><option' + (user.company==='Almah'?' selected':'') + '>Almah</option></select></div>';
+  h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Nome</label><input class="form-input" id="cfgName" value="' + esc(user.name).replace(/"/g,'&quot;') + '" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
+  h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Empresa</label><select id="cfgCompany" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;background:white;"><option' + (esc(user.company)==='Porter'?' selected':'') + '>Porter</option><option' + (esc(user.company)==='Almah'?' selected':'') + '>Almah</option></select></div>';
   h += '<button id="btn-save-profile" style="padding:9px 20px;background:#1B2B6B;color:white;border:none;border-radius:9px;font-weight:700;font-size:.88rem;cursor:pointer;align-self:flex-start;">💾 Salvar Perfil</button>';
   h += '</div></div></div>';
 
@@ -5260,8 +5176,8 @@ function render() {
     users.forEach(function(u, i) {
       h += '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;' + (i<users.length-1?'border-bottom:1px solid #EEF0F6;':'') + '">';
       h += '<div style="width:36px;height:36px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.82rem;flex-shrink:0;">' + u.initials + '</div>';
-      h += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.88rem;">' + u.name + '</div><div style="font-size:.7rem;color:#9CA3BF;">' + u.email + '</div></div>';
-      h += '<span style="padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:' + (u.company==='Porter'?'rgba(27,43,107,.08)':'rgba(245,197,24,.15)') + ';color:' + (u.company==='Porter'?'#1B2B6B':'#92400E') + ';">' + u.company + '</span>';
+      h += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.88rem;">' + esc(u.name) + '</div><div style="font-size:.7rem;color:#9CA3BF;">' + esc(u.email) + '</div></div>';
+      h += '<span style="padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:' + (u.company==='Porter'?'rgba(27,43,107,.08)':'rgba(245,197,24,.15)') + ';color:' + (u.company==='Porter'?'#1B2B6B':'#92400E') + ';">' + esc(u.company) + '</span>';
       h += '<span style="padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:' + (u.role==='admin'?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)') + ';color:' + (u.role==='admin'?'#DC2626':'#16A34A') + ';">' + u.role + '</span>';
       h += '<button data-toggleadmin="' + u.id + '" style="padding:4px 8px;background:#EEF0F6;border:1px solid #DDE1EE;border-radius:6px;font-size:.7rem;cursor:pointer;" title="' + (u.role==='admin'?'Remover admin':'Tornar admin') + '">' + (u.role==='admin'?'👑':'⬆️') + '</button>';
       h += '<button data-deleteuser="' + u.id + '" style="padding:4px 8px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:6px;font-size:.7rem;cursor:pointer;color:#DC2626;">🗑️</button>';
@@ -5335,8 +5251,8 @@ function bindEvents(pc) {
   var resetBtn = document.getElementById('btn-reset-data');
   if (resetBtn) resetBtn.addEventListener('click', function() {
     if (!confirm('Limpar TODOS os dados de demonstração?')) return;
-    ['bolao_games','bolao_bets','bolao_users','bolao_specials','bolao_final_results'].forEach(function(k){localStorage.removeItem(k);});
-    Utils.toast('Dados resetados!','info');
+    ['games','bets','users','specials','final_results','ranking'].forEach(function(k){ DB.set(k, undefined); });
+    Utils.toast('Cache limpo! Recarregando do Supabase...','info');
     setTimeout(function(){ SPA.navigate('login'); }, 1200);
   });
 
@@ -5391,20 +5307,25 @@ function openNewUserModal() {
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
   overlay.addEventListener('click', function(e){ if(e.target===overlay) closeModal(); });
 
-  document.getElementById('modal-save').addEventListener('click', function() {
+  document.getElementById('modal-save').addEventListener('click', async function() {
     var name = document.getElementById('nu-name').value.trim();
     var email = document.getElementById('nu-email').value.trim().toLowerCase();
     var pass = document.getElementById('nu-pass').value.trim() || '123456';
     var company = document.getElementById('nu-company').value;
     if (!name || !email) { Utils.toast('Nome e e-mail obrigatórios','error'); return; }
-    var users = DB.getUsers();
-    if (users.find(function(u){return u.email===email;})) { Utils.toast('E-mail já cadastrado','error'); return; }
+    if (pass.length < 6) { Utils.toast('Senha inicial precisa de 6+ caracteres','error'); return; }
     var initials = name.split(' ').slice(0,2).map(function(n){return n[0];}).join('').toUpperCase();
-    users.push({id:'u_'+Date.now(), name:name, email:email, company:company, role:'participant', initials:initials, password:pass});
-    DB.saveUsers(users);
-    Utils.toast(name+' cadastrado(a)! ✓','success');
-    closeModal();
-    render();
+    var saveBtn = document.getElementById('modal-save'); saveBtn.disabled=true; saveBtn.textContent='Cadastrando...';
+    try {
+      await sbCreateUser(email, pass, {name:name, company:company, role:'participant', initials:initials});
+      Utils.toast(name+' cadastrado(a)! ✓','success');
+      closeModal();
+      if (window.syncProfilesFromSupabase) await syncProfilesFromSupabase();
+      render();
+    } catch(e) {
+      saveBtn.disabled=false; saveBtn.textContent='Cadastrar';
+      Utils.toast(/registered|already|exists/i.test(e.message)?'E-mail já cadastrado':('Erro: '+e.message),'error');
+    }
   });
 }
 
@@ -5485,7 +5406,7 @@ function openImportModal() {
       }
       var ph = '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:.82rem;color:#16A34A;font-weight:700;">✅ ' + parsedUsers.length + ' participante(s) encontrado(s)</div>';
       ph += '<div style="max-height:150px;overflow-y:auto;font-size:.8rem;">';
-      parsedUsers.slice(0,5).forEach(function(u){ ph += '<div style="padding:4px 0;color:#5A6385;">• '+u.name+' ('+u.email+') — '+u.company+'</div>'; });
+      parsedUsers.slice(0,5).forEach(function(u){ ph += '<div style="padding:4px 0;color:#5A6385;">• '+esc(u.name)+' ('+esc(u.email)+') — '+esc(u.company)+'</div>'; });
       if (parsedUsers.length > 5) ph += '<div style="color:#9CA3BF;">...e mais '+(parsedUsers.length-5)+'</div>';
       if (errors.length) { ph += '<div style="color:#DC2626;margin-top:6px;">⚠️ '+errors.length+' linha(s) ignorada(s)</div>'; }
       ph += '</div>';
@@ -5495,16 +5416,18 @@ function openImportModal() {
     reader.readAsText(file, 'UTF-8');
   }
 
-  document.getElementById('imp-confirm').addEventListener('click', function() {
+  document.getElementById('imp-confirm').addEventListener('click', async function() {
     if (!parsedUsers.length) return;
-    var users = DB.getUsers();
+    var btn = document.getElementById('imp-confirm'); btn.disabled=true; btn.textContent='Importando...';
     var added = 0, skipped = 0;
-    parsedUsers.forEach(function(u) {
-      if (users.find(function(ex){return ex.email===u.email;})) { skipped++; return; }
-      users.push(u); added++;
-    });
-    DB.saveUsers(users);
-    Utils.toast(added+' cadastrado(s), '+skipped+' já existiam ✓','success');
+    for (var i=0; i<parsedUsers.length; i++) {
+      var u = parsedUsers[i];
+      var pass = (u.password && u.password.length>=6) ? u.password : '123456';
+      try { await sbCreateUser(u.email, pass, {name:u.name, company:u.company, role:'participant', initials:u.initials}); added++; }
+      catch(e) { skipped++; }
+    }
+    if (window.syncProfilesFromSupabase) await syncProfilesFromSupabase();
+    Utils.toast(added+' cadastrado(s), '+skipped+' falharam/já existiam ✓','success');
     closeModal(); render();
   });
 }
@@ -5840,11 +5763,11 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
           h += '<td style="padding:9px 14px;">';
           h += '<div style="display:flex;align-items:center;gap:8px;">';
           h += '<div style="width:28px;height:28px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:white;flex-shrink:0;">'+u.initials+'</div>';
-          h += '<div style="font-size:.85rem;font-weight:'+(isMe?'700':'500')+';color:#2D3557;">'+u.name+(isMe?' <span style="font-size:.62rem;color:#3D5AC8">(você)</span>':'')+'</div>';
+          h += '<div style="font-size:.85rem;font-weight:'+(isMe?'700':'500')+';color:#2D3557;">'+esc(u.name)+(isMe?' <span style="font-size:.62rem;color:#3D5AC8">(você)</span>':'')+'</div>';
           h += '</div></td>';
 
           h += '<td style="padding:9px 12px;text-align:center;">';
-          h += '<span style="padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:'+(u.company==='Porter'?'rgba(27,43,107,.08)':'rgba(245,197,24,.15)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';">'+u.company+'</span>';
+          h += '<span style="padding:2px 8px;border-radius:99px;font-size:.65rem;font-weight:800;background:'+(u.company==='Porter'?'rgba(27,43,107,.08)':'rgba(245,197,24,.15)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';">'+esc(u.company)+'</span>';
           h += '</td>';
 
           h += '<td style="padding:9px 12px;text-align:center;">';
@@ -5910,7 +5833,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
 }};
 
 Auth.init=function(){var r=localStorage.getItem('bolao_user');if(!r){SPA.navigate('login');return false;}this.user=JSON.parse(r);return true;};
-Auth.logout=function(){localStorage.removeItem('bolao_user');SPA.navigate('login');};
+Auth.logout=function(){Sess.clear();SPA.navigate('login');};
 
 // ═══════════════════════════════════════════════════════════════════
 // SUPABASE LAYER — dados compartilhados em tempo real
@@ -5918,16 +5841,56 @@ Auth.logout=function(){localStorage.removeItem('bolao_user');SPA.navigate('login
 var SUPABASE_URL = 'https://ldygmzsqjoxlxtrdgstv.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeWdtenNxam94bHh0cmRnc3R2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTYwODQsImV4cCI6MjA5NjA5MjA4NH0.nMmVTWHZukubtRrTSe486ducJkvQiTAhd8pNrV6I_Ts';
 
+// ── Sessão / Auth (Supabase Auth + JWT) ──────────────────────────────
+var SUPABASE_ANON = SUPABASE_KEY; // chave pública (anon) — só leitura permitida por RLS
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+var Sess = {
+  get:function(){ try{return JSON.parse(localStorage.getItem('bolao_session')||'null');}catch(e){return null;} },
+  set:function(s){ localStorage.setItem('bolao_session', JSON.stringify(s)); },
+  clear:function(){ localStorage.removeItem('bolao_session'); localStorage.removeItem('bolao_user'); },
+  token:function(){ var s=this.get(); return s&&s.access_token; },
+  headers:function(json){ var h={'apikey':SUPABASE_ANON,'Authorization':'Bearer '+(this.token()||SUPABASE_ANON)}; if(json!==false){h['Content-Type']='application/json';} return h; },
+  ensure:async function(){ var s=this.get(); if(!s)return false; if(s.expires_at && (Date.now()/1000)>(s.expires_at-60)){ return await this.refresh(); } return true; },
+  refresh:async function(){ var s=this.get(); if(!s||!s.refresh_token)return false;
+    try{ var r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':SUPABASE_ANON,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});
+      if(!r.ok){this.clear();return false;} var d=await r.json(); this.set({access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at,user:d.user}); return true;
+    }catch(e){return false;} }
+};
+async function loadProfile(){
+  var s=Sess.get(); if(!s||!s.user)return null;
+  var uid=s.user.id, email=s.user.email, prof=null;
+  try{ var r=await fetch(SUPABASE_URL+'/rest/v1/profiles?id=eq.'+encodeURIComponent(uid)+'&select=*&limit=1',{headers:Sess.headers(false)}); if(r.ok){var rows=await r.json(); prof=rows&&rows[0];} }catch(e){}
+  var u = prof || { id:uid, email:email, name:(email||'').split('@')[0], role:'participant', company:'Porter', initials:(email||'??').slice(0,2).toUpperCase() };
+  localStorage.setItem('bolao_user', JSON.stringify(u)); Auth.user=u; return u;
+}
+async function sbLogin(email,password){
+  var r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':SUPABASE_ANON,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password})});
+  var d=await r.json(); if(!r.ok) throw new Error(d.error_description||d.msg||'E-mail ou senha incorretos.');
+  Sess.set({access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at,user:d.user});
+  var u=await loadProfile(); await initSupabase();
+  if(window.reconcileLocalBets) await reconcileLocalBets();
+  return u;
+}
+async function sbSignup(email,password,meta){
+  var r=await fetch(SUPABASE_URL+'/auth/v1/signup',{method:'POST',headers:{'apikey':SUPABASE_ANON,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password,data:meta||{}})});
+  var d=await r.json(); if(!r.ok) throw new Error(d.error_description||d.msg||d.error||'Cadastro falhou.');
+  if(d.access_token){ Sess.set({access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at,user:d.user}); var u=await loadProfile(); await initSupabase(); return u; }
+  return await sbLogin(email,password);
+}
+// cria conta SEM trocar a sessão atual (admin cadastrando outro usuário)
+async function sbCreateUser(email,password,meta){
+  var r=await fetch(SUPABASE_URL+'/auth/v1/signup',{method:'POST',headers:{'apikey':SUPABASE_ANON,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password,data:meta||{}})});
+  var d=await r.json(); if(!r.ok) throw new Error(d.error_description||d.msg||d.error||'erro'); return d;
+}
+async function syncProfilesFromSupabase(){
+  try{ var r=await fetch(SUPABASE_URL+'/rest/v1/profiles?select=*',{headers:Sess.headers(false)}); if(!r.ok)return false; var rows=await r.json(); if(rows&&rows.length){ DB.set('users', rows); } return true; }catch(e){return false;}
+}
+
 var SB = {
   _cache: {},
 
   headers: function() {
-    return {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation'
-    };
+    return Object.assign({}, Sess.headers(), {'Prefer': 'return=representation'});
   },
 
   async get(table, query) {
@@ -5983,43 +5946,25 @@ async function initSupabase() {
       await seedGamesToSupabase();
     }
 
-    // Load users
-    var users = await SB.get('users', 'select=*');
+    // Load users (profiles — sem senha)
+    var users = await SB.get('profiles', 'select=*');
     if (users && users.length > 0) {
-      DB.saveUsers(users);
-      console.log('[Supabase] Loaded', users.length, 'users');
+      DB.set('users', users);
+      console.log('[Supabase] Loaded', users.length, 'profiles');
     }
 
-    // Load bets (via view bets_public: esconde placar de jogos não finalizados)
-    var bets = await SB.get('bets_public', 'select=*');
-    if (bets) {
-      // Parte do local para não perder o próprio palpite que a view esconde (jogo aberto)
-      var betsObj = DB.getBets() || {};
-      bets.forEach(function(b) {
-        if (!betsObj[b.user_email]) betsObj[b.user_email] = {};
-        // jogo ainda aberto (placar escondido): não apaga um palpite local existente
-        if (b.home_score === null && b.away_score === null && betsObj[b.user_email][b.game_id]) return;
-        betsObj[b.user_email][b.game_id] = {
-          home_score: b.home_score,
-          away_score: b.away_score,
-          savedAt: new Date(b.saved_at).getTime()
-        };
-      });
-      DB.saveBets(betsObj);
-      console.log('[Supabase] Loaded', bets.length, 'bets');
-    }
+    // Bets: SÓ os próprios (delega p/ syncBetsFromSupabase, que também busca o ranking via RPC)
+    if (window.syncBetsFromSupabase) await syncBetsFromSupabase();
 
-    // Load specials
-    var specials = await SB.get('specials', 'select=*');
-    if (specials) {
+    // Specials: SÓ os próprios
+    var meInit = Auth.user && Auth.user.email;
+    if (meInit) {
+      var specials = await SB.get('specials', 'user_email=eq.' + encodeURIComponent(meInit) + '&select=*');
       var specsObj = {};
-      specials.forEach(function(s) {
-        specsObj[s.user_email] = {
-          champion: s.champion, runner_up: s.runner_up,
-          third: s.third, qualified: s.qualified || []
-        };
+      (specials || []).forEach(function(s) {
+        specsObj[s.user_email] = { champion: s.champion, runner_up: s.runner_up, third: s.third, qualified: s.qualified || [] };
       });
-      localStorage.setItem('bolao_specials', JSON.stringify(specsObj));
+      DB.set('specials', specsObj);
     }
 
     // Load settings (final results)
@@ -6058,9 +6003,7 @@ async function seedGamesToSupabase() {
       var res = await fetch(SUPABASE_URL + '/rest/v1/games', {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json',
+          ...Sess.headers(),
           'Prefer': 'resolution=merge-duplicates,return=minimal'
         },
         body: JSON.stringify(rows.slice(i, i+20))
@@ -6095,9 +6038,7 @@ DB.saveBet = async function(userId, gameId, bet) {
       var res = await fetch(SUPABASE_URL + '/rest/v1/bets?on_conflict=user_email,game_id', {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json',
+          ...Sess.headers(),
           'Prefer': 'resolution=merge-duplicates,return=minimal'
         },
         body: JSON.stringify(payload)
@@ -6105,6 +6046,7 @@ DB.saveBet = async function(userId, gameId, bet) {
       
       if (res.ok) {
         console.log('[SB] Bet saved OK:', gameId, bet.home_score+'x'+bet.away_score);
+        if (window.syncRankingFromSupabase) syncRankingFromSupabase();
         return; // success
       }
       
@@ -6130,49 +6072,95 @@ DB.saveBet = async function(userId, gameId, bet) {
 
 // Sync all bets from Supabase into localStorage
 window.syncBetsFromSupabase = async function() {
+  var me = Auth.user && Auth.user.email;
+  if (!me) return false;
   try {
-    // via view bets_public: esconde placar de jogos não finalizados
-    var res = await fetch(SUPABASE_URL + '/rest/v1/bets_public?select=*', {
-      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY}
-    });
+    // Puxa SOMENTE os próprios palpites (privacidade: ninguém vê palpite alheio)
+    var res = await fetch(SUPABASE_URL + '/rest/v1/bets?user_email=eq.' + encodeURIComponent(me) + '&select=game_id,home_score,away_score,saved_at', { headers: Sess.headers(false) });
     if (!res.ok) return false;
-    var bets = await res.json();
-    // Start with existing local bets (don't lose unsaved ones)
-    var betsObj = DB.getBets() || {};
-    // Merge Supabase bets (Supabase wins on conflict - it's the source of truth)
-    bets.forEach(function(b) {
-      if (!betsObj[b.user_email]) betsObj[b.user_email] = {};
-      // jogo ainda aberto (placar escondido pela view): não apaga um palpite local existente
-      if (b.home_score === null && b.away_score === null && betsObj[b.user_email][b.game_id]) return;
-      betsObj[b.user_email][b.game_id] = {
-        home_score: b.home_score,
-        away_score: b.away_score,
-        savedAt: new Date(b.saved_at).getTime()
-      };
-    });
-    DB.saveBets(betsObj);
+    var mine = await res.json();
+    // Cache local SÓ com os meus — sobrescreve e apaga qualquer resíduo de outros
+    var mineObj = {};
+    mine.forEach(function(b){ mineObj[b.game_id] = { home_score: b.home_score, away_score: b.away_score, savedAt: new Date(b.saved_at).getTime() }; });
+    var only = {}; only[me] = mineObj;
+    DB.saveBets(only);
+    // Ranking vem pronto do servidor (RPC), sem expor palpite de ninguém
+    if (window.syncRankingFromSupabase) await syncRankingFromSupabase();
     return true;
   } catch(e) { return false; }
 };
 
+// Ranking calculado no servidor (RPC public.ranking) — só agregado, nunca palpite cru de outro
+window.syncRankingFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ranking', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    var mapped = (rows || []).map(function(u){ return {
+      email: u.email, name: u.name, company: u.company, role: u.role, initials: u.initials,
+      totalPts: u.total_pts, exactScores: u.exact_scores, correctWinners: u.correct_winners,
+      betCount: u.bet_count, avgBetTime: u.avg_bet_time, position: u.pos
+    }; });
+    DB.set('ranking', mapped);
+    return true;
+  } catch(e) { return false; }
+};
+
+// Reconciliação ÚNICA por navegador: empurra palpites locais (verdade) p/ Supabase;
+// depois marca sincronizado e o Supabase passa a ser a fonte.
+window.reconcileLocalBets = async function() {
+  var me = Auth.user && Auth.user.email; if (!me) return;
+  var flag = 'bolao_synced_' + me;
+  if (localStorage.getItem(flag)) return; // já reconciliado neste navegador
+  try {
+    // lê os palpites legados do localStorage do app ANTIGO (única vez)
+    var localMine = {};
+    try { localMine = (JSON.parse(localStorage.getItem('bolao_bets') || '{}')[me]) || {}; } catch(e) {}
+    var r = await fetch(SUPABASE_URL + '/rest/v1/bets?user_email=eq.' + encodeURIComponent(me) + '&select=game_id,home_score,away_score', { headers: Sess.headers(false) });
+    var remote = r.ok ? await r.json() : [];
+    var rmap = {}; remote.forEach(function(b){ rmap[b.game_id] = b; });
+    var toPush = [];
+    Object.keys(localMine).forEach(function(gid){
+      var lb = localMine[gid];
+      if (!lb || lb.home_score == null || lb.away_score == null) return;     // sem placar válido: ignora
+      var lh = Number(lb.home_score), la = Number(lb.away_score);
+      if (isNaN(lh) || isNaN(la)) return;
+      var rb = rmap[gid];
+      if (!rb || Number(rb.home_score) !== lh || Number(rb.away_score) !== la) {   // faltando ou diferente → local vence
+        toPush.push({ user_email: me, game_id: gid, home_score: lh, away_score: la, saved_at: new Date(lb.savedAt || Date.now()).toISOString() });
+      }
+    });
+    if (toPush.length) {
+      var up = await fetch(SUPABASE_URL + '/rest/v1/bets?on_conflict=user_email,game_id', { method: 'POST', headers: Object.assign({}, Sess.headers(), {'Prefer':'resolution=merge-duplicates,return=minimal'}), body: JSON.stringify(toPush) });
+      if (!up.ok) { console.warn('[reconcile] push falhou', up.status, (await up.text()).slice(0,120)); return; } // não marca flag → tenta de novo no próximo load
+      console.log('[reconcile] enviados', toPush.length, 'palpite(s) local → Supabase');
+    }
+    localStorage.setItem(flag, '1');                              // navegador sincronizado
+    // purga qualquer dado legado do localStorage — daqui pra frente só Supabase (memória)
+    ['bolao_bets','bolao_specials','bolao_games','bolao_users','bolao_final_results','bolao_ranking'].forEach(function(k){ localStorage.removeItem(k); });
+    if (window.syncBetsFromSupabase) await syncBetsFromSupabase(); // a partir daqui, Supabase é a verdade
+  } catch(e) { console.warn('[reconcile]', e.message); }
+};
+
 // Sync specials from Supabase
 window.syncSpecialsFromSupabase = async function() {
+  var me = Auth.user && Auth.user.email;
+  if (!me) return false;
   try {
-    var res = await fetch(SUPABASE_URL + '/rest/v1/specials?select=*', {
-      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY}
+    // SÓ os próprios especiais (privacidade)
+    var res = await fetch(SUPABASE_URL + '/rest/v1/specials?user_email=eq.' + encodeURIComponent(me) + '&select=*', {
+      headers: Sess.headers(false)
     });
     if (!res.ok) return false;
     var specials = await res.json();
-    // Merge with existing (don't overwrite local unsaved data)
     var specsObj = {};
-    try { specsObj = JSON.parse(localStorage.getItem('bolao_specials') || '{}'); } catch(e) {}
     specials.forEach(function(s) {
       specsObj[s.user_email] = {
         champion: s.champion, runner_up: s.runner_up,
         third: s.third, qualified: s.qualified || []
       };
     });
-    localStorage.setItem('bolao_specials', JSON.stringify(specsObj));
+    DB.set('specials', specsObj);
     return true;
   } catch(e) { return false; }
 };
@@ -6187,9 +6175,7 @@ DB.saveSpecials = async function(userId, data) {
     var res = await fetch(SUPABASE_URL + '/rest/v1/specials?on_conflict=user_email', {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Content-Type': 'application/json',
+        ...Sess.headers(),
         'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
       body: JSON.stringify({
@@ -6205,6 +6191,7 @@ DB.saveSpecials = async function(userId, data) {
       console.error('[SB] saveSpecials failed:', res.status, err.substring(0,150));
     } else {
       console.log('[SB] Specials saved OK for', u.email);
+      if (window.syncRankingFromSupabase) syncRankingFromSupabase();
     }
   } catch(e) { console.warn('[Supabase] saveSpecials failed', e.message); }
 };
@@ -6227,6 +6214,7 @@ DB.saveGames = async function(games) {
         tbd: g.tbd||false
       });
     }
+    if (window.syncRankingFromSupabase) await syncRankingFromSupabase(); // resultado mudou → recalcula ranking
   } catch(e) { console.warn('[Supabase] saveGames failed:', e.message); }
 };
 
@@ -6235,12 +6223,14 @@ var _origSaveUsers = DB.saveUsers.bind(DB);
 DB.saveUsers = async function(users) {
   _origSaveUsers(users);
   try {
-    var newUsers = users.filter(function(u){ return u.id && u.id.startsWith('u_'); });
-    for (var i=0; i<newUsers.length; i++) {
-      var u = newUsers[i];
-      await SB.upsert('users', {
-        name: u.name, email: u.email, company: u.company,
-        role: u.role, password: u.password||'123456', initials: u.initials
+    // Só persiste edições de perfis já existentes (id = uuid do Auth).
+    // Criação de usuário é via Supabase Auth (signup), não aqui.
+    var existing = users.filter(function(u){ return u.id && /-/.test(u.id); });
+    for (var i=0; i<existing.length; i++) {
+      var u = existing[i];
+      await SB.upsert('profiles', {
+        id: u.id, email: u.email, name: u.name,
+        company: u.company, role: u.role, initials: u.initials
       });
     }
   } catch(e) { console.warn('[Supabase] saveUsers failed:', e.message); }
@@ -6264,7 +6254,7 @@ setInterval(async function() {
 
     // Sync game results
     var res = await fetch(SUPABASE_URL + '/rest/v1/games?select=*&order=date.asc', {
-      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY}
+      headers: Sess.headers(false)
     });
     if (res.ok) {
       var games = await res.json();
@@ -6310,12 +6300,18 @@ document.addEventListener('click', function _apostasGlobalHandler(e) {
   if (saveBtn && window._apostasSave) window._apostasSave(saveBtn.getAttribute('data-savebet'));
 });
 
-// Boot Supabase
-initSupabase();
-
-
-var _h=(window.location.hash||'').replace('#','');
-SPA.navigate(SPA.pages[_h]?_h:'login');
+// Boot
+(async function(){
+  if (Sess.get()) {
+    await Sess.ensure();
+    try { Auth.user = JSON.parse(localStorage.getItem('bolao_user')||'null'); } catch(e){}
+    await initSupabase();
+    if (window.syncBetsFromSupabase) await syncBetsFromSupabase();
+    if (window.reconcileLocalBets) await reconcileLocalBets();
+  }
+  var _h=(window.location.hash||'').replace('#','');
+  SPA.navigate(SPA.pages[_h] ? _h : (Sess.get()?'dashboard':'login'));
+})();
 </script>
 </body>
 </html>
