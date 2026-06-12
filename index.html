@@ -2389,7 +2389,7 @@ const Utils = {
     return Date.now() < this.betDeadline(game).getTime();
   },
   phaseName(p) {
-    return { groups:'Fase de Grupos', round_of_16:'Oitavas de Final', quarterfinals:'Quartas de Final', semifinals:'Semifinais', third_place:'3º Lugar', final:'Final' }[p] || p;
+    return { groups:'Fase de Grupos', round_of_32:'16-avos de Final', round_of_16:'Oitavas de Final', quarterfinals:'Quartas de Final', semifinals:'Semifinais', third_place:'3º Lugar', final:'Final' }[p] || p;
   },
   phaseMultiplier(p) { return MULTIPLIERS[p] || 1; },
 
@@ -3024,7 +3024,7 @@ SPA.pages["palpites"]={style:`.phase-section { margin-bottom: 28px; }
 
     // Group by phase
     var phases = {};
-    var phaseOrder = ['groups','round_of_16','quarterfinals','semifinals','third_place','final'];
+    var phaseOrder = ['groups','round_of_32','round_of_16','quarterfinals','semifinals','third_place','final'];
     filtered.forEach(function(g){
       if (!phases[g.phase]) phases[g.phase] = [];
       phases[g.phase].push(g);
@@ -3366,7 +3366,7 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
 
     // Group by phase
     var phases = {};
-    var phaseOrder = ['groups','round_of_16','quarterfinals','semifinals','third_place','final'];
+    var phaseOrder = ['groups','round_of_32','round_of_16','quarterfinals','semifinals','third_place','final'];
     filtered.forEach(function(g){
       if (!phases[g.phase]) phases[g.phase] = [];
       phases[g.phase].push(g);
@@ -4435,7 +4435,7 @@ function openGameModal(id) {
     fld('Data e Hora','gDate',g?g.date.slice(0,16):'','datetime-local','')+
     '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Fase</label>'+
     '<select id="gPhase" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.85rem;outline:none;background:white;">'+
-    ['groups','round_of_16','quarterfinals','semifinals','third_place','final'].map(function(p){
+    ['groups','round_of_32','round_of_16','quarterfinals','semifinals','third_place','final'].map(function(p){
       return '<option value="'+p+'"'+(g&&g.phase===p?' selected':'')+'>'+Utils.phaseName(p)+'</option>';
     }).join('')+
     '</select></div>'+
@@ -4701,6 +4701,7 @@ function render() {
   const games = DB.getGames();
 
   // Bracket games
+  const r32 = games.filter(g => g.phase === 'round_of_32');
   const r16 = games.filter(g => g.phase === 'round_of_16');
   const qf = games.filter(g => g.phase === 'quarterfinals');
   const sf = games.filter(g => g.phase === 'semifinals');
@@ -4739,11 +4740,18 @@ function render() {
     <div class="bracket-container">
       <div class="bracket-row">
 
+        <!-- 16-avos -->
+        <div class="bracket-stage">
+          <div class="bstage-title">🎲 16-avos de Final</div>
+          ${r32.length > 0 ? r32.map(g => renderBracketMatch(g)).join('') :
+          Array.from({length:16}).map(() => renderTbdMatch()).join('')}
+        </div>
+
         <!-- Oitavas -->
         <div class="bracket-stage">
           <div class="bstage-title">⚡ Oitavas de Final</div>
           ${r16.length > 0 ? r16.map(g => renderBracketMatch(g)).join('') :
-          Array.from({length:8}).map(() => renderTbdMatch()).join('')}
+          Array.from({length:8}).map(() => renderTbdMatch('Vencedor 16-avos')).join('')}
         </div>
 
         <!-- Quartas -->
