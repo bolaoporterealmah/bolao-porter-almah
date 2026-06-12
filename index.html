@@ -810,16 +810,34 @@ const FLAGS = {
   'Egito':'🇪🇬','Equador':'🇪🇨','Senegal':'🇸🇳','Uruguai':'🇺🇾',
 };
 
-function flag(team) {
-  // Windows não renderiza emoji de bandeira → vira <img> do flagcdn.
-  // Deriva o ISO-2 do próprio emoji (regional indicators), sem mapa extra.
+// URL da bandeira (flagcdn) ou '' — Windows não renderiza emoji de bandeira.
+// Tenta o ISO-2 do emoji do FLAGS; se faltar, usa o ISO do teamCode.
+function flagSrc(team) {
+  var code = '';
   var e = FLAGS[team] || '';
-  if (!e) return '';
-  var cp = Array.from(e).map(function(c){ return c.codePointAt(0); });
-  if (cp.length < 2 || cp[0] < 0x1F1E6) return e; // não é bandeira: devolve cru
-  var cc = (String.fromCharCode(cp[0]-0x1F1E6+65) + String.fromCharCode(cp[1]-0x1F1E6+65)).toLowerCase();
-  return '<img src="https://flagcdn.com/'+cc+'.svg" alt="'+team+'" loading="lazy" '+
-    'style="height:1em;width:auto;vertical-align:-0.15em;display:inline-block;border-radius:2px;box-shadow:0 0 1px rgba(0,0,0,.3);">';
+  if (e) {
+    var cp = Array.from(e).map(function(c){ return c.codePointAt(0); });
+    if (cp.length >= 2 && cp[0] >= 0x1F1E6)
+      code = String.fromCharCode(cp[0]-0x1F1E6+65) + String.fromCharCode(cp[1]-0x1F1E6+65);
+  }
+  if (!code) { var tc = teamCode(team); if (/^[A-Z]{2}$/.test(tc)) code = tc; }
+  return code ? 'https://flagcdn.com/'+code.toLowerCase()+'.svg' : '';
+}
+
+// Bandeira inline (acompanha o tamanho da fonte). '' se não houver.
+function flag(team) {
+  var s = flagSrc(team);
+  return s ? '<img src="'+s+'" alt="'+team+'" loading="lazy" '+
+    'style="height:1em;width:auto;vertical-align:-0.15em;display:inline-block;border-radius:2px;box-shadow:0 0 1px rgba(0,0,0,.3);">' : '';
+}
+
+// Bandeira retangular natural (sem cortar), altura fixa. Fallback = badge c/ sigla.
+function teamFlag(team, h) {
+  var s = flagSrc(team);
+  if (s) return '<img src="'+s+'" alt="'+team+'" loading="lazy" '+
+    'style="height:'+h+';width:auto;display:inline-block;vertical-align:middle;border-radius:3px;box-shadow:0 0 2px rgba(0,0,0,.35);">';
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;height:'+h+';min-width:'+h+';padding:0 4px;'+
+    'background:#1B2B6B;color:white;border-radius:3px;font-size:.55rem;font-weight:800;">'+teamCode(team)+'</span>';
 }
 
 // 2-letter country code for team buttons
@@ -3891,7 +3909,7 @@ SPA.pages["palpites"]={style:``,script:function(){
     // Current selection display
     if (current) {
       h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(27,43,107,.05);border-radius:10px;margin-bottom:10px;">';
-      h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:2.2rem;height:2.2rem;background:#1B2B6B;color:white;border-radius:5px;font-size:.68rem;font-weight:800;">'+teamCode(current)+'</span>';
+      h += teamFlag(current, '2.2rem');
       h += '<div style="flex:1;"><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Selecionado</div>';
       h += '<div style="font-weight:800;color:#1B2B6B;">'+current+'</div></div>';
       if (!LOCKED) h += '<button data-pick="'+field+'|'+current+'" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:#9CA3BF;padding:4px;">✕ trocar</button>';
@@ -3909,7 +3927,7 @@ SPA.pages["palpites"]={style:``,script:function(){
         h += 'background:'+(isSel?'rgba(27,43,107,.1)':'white')+';';
         h += 'border:'+(isSel?'2px solid #1B2B6B':'1px solid #DDE1EE')+';';
         h += 'border-radius:8px;cursor:pointer;font-family:inherit;">';
-        h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;background:'+(isSel?'#1B2B6B':'#5A6385')+';color:white;border-radius:3px;font-size:.55rem;font-weight:800;">'+teamCode(t)+'</span>';
+        h += teamFlag(t, '1.6rem');
         h += '<span style="font-size:.58rem;font-weight:700;text-align:center;color:#2D3557;line-height:1.2;">'+t+'</span>';
         h += '</button>';
       });
@@ -3938,7 +3956,7 @@ SPA.pages["palpites"]={style:``,script:function(){
       h += 'background:'+(isSel?'rgba(27,43,107,.1)':'white')+';';
       h += 'border:'+(isSel?'2px solid #1B2B6B':'1px solid #DDE1EE')+';';
       h += 'border-radius:8px;cursor:'+(LOCKED?'default':'pointer')+';font-family:inherit;">';
-      h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;background:'+(isSel?'#1B2B6B':'#5A6385')+';color:white;border-radius:3px;font-size:.55rem;font-weight:800;">'+teamCode(t)+'</span>';
+      h += teamFlag(t, '1.6rem');
       h += '<span style="font-size:.58rem;font-weight:700;text-align:center;color:#2D3557;line-height:1.2;">'+t+'</span>';
       h += '</button>';
     });
@@ -3951,7 +3969,7 @@ SPA.pages["palpites"]={style:``,script:function(){
     var h = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">';
     sel.qualified.forEach(function(t) {
       h += '<span data-remove="'+t+'" style="display:inline-flex;align-items:center;gap:4px;background:rgba(27,43,107,.08);border:1px solid rgba(27,43,107,.2);border-radius:99px;padding:3px 9px;font-size:.75rem;font-weight:600;cursor:'+(LOCKED?'default':'pointer')+';">';
-      h += teamCode(t)+' '+t;
+      h += flag(t)+' '+t;
       if (!LOCKED) h += ' <span style="opacity:.5;font-size:.7rem;">✕</span>';
       h += '</span>';
     });
@@ -5014,7 +5032,7 @@ SPA.pages["perfil"]={style:`.profile-header {
 
         h += '<tr style="border-bottom:1px solid #EEF0F6;">';
         h += '<td style="padding:10px 14px;font-size:.78rem;color:#9CA3BF;white-space:nowrap;">'+Utils.formatDate(g.date)+'</td>';
-        h += '<td style="padding:10px 14px;font-size:.85rem;font-weight:600;">'+teamCode(g.home)+' '+g.home+' × '+g.away+' '+teamCode(g.away)+'</td>';
+        h += '<td style="padding:10px 14px;font-size:.85rem;font-weight:600;">'+flag(g.home)+' '+g.home+' × '+g.away+' '+flag(g.away)+'</td>';
         h += '<td style="padding:10px 14px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;font-weight:900;color:#1B2B6B;">'+bet.home_score+' × '+bet.away_score+(exact?' 🎯':'')+'</td>';
         h += '<td style="padding:10px 14px;text-align:center;">';
         if (g.result) {
@@ -5666,7 +5684,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       // Teams row
       h += '<div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:center;gap:16px;border-bottom:1.5px solid #EEF0F6;">';
       h += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">';
-      h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:2.2rem;height:2.2rem;background:#1B2B6B;color:white;border-radius:5px;font-size:.65rem;font-weight:800;">'+teamCode(game.home)+'</span>';
+      h += teamFlag(game.home, '2.2rem');
       h += '<span style="font-size:.82rem;font-weight:700;color:#2D3557;text-align:center;">'+game.home+'</span>';
       h += '</div>';
       h += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">';
@@ -5682,7 +5700,7 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       }
       h += '</div>';
       h += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">';
-      h += '<span style="display:inline-flex;align-items:center;justify-content:center;width:2.2rem;height:2.2rem;background:#1B2B6B;color:white;border-radius:5px;font-size:.65rem;font-weight:800;">'+teamCode(game.away)+'</span>';
+      h += teamFlag(game.away, '2.2rem');
       h += '<span style="font-size:.82rem;font-weight:700;color:#2D3557;text-align:center;">'+game.away+'</span>';
       h += '</div>';
       h += '</div>';
