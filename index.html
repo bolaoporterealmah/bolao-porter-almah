@@ -4880,34 +4880,26 @@ SPA.pages["hall"]={style:`.hall-hero {
 
 .tbd-badge { display:inline-flex; align-items:center; gap:4px; background:var(--porter-gray-100); border-radius:99px; padding:4px 12px; font-size:0.72rem; color:var(--porter-gray-400); font-weight:600; }`,script:function(){
 
-(function(){
+function renderHall(){
   var user = Auth.user;
   var ranking = DB.getRanking();
   var games = DB.getGames();
-  var bets = DB.getBets();
 
   var top1 = ranking[0], top2 = ranking[1], top3 = ranking[2];
 
   // Rei dos placares (mais placares exatos)
   var reiPlacares = ranking.slice().sort(function(a,b){ return b.exactScores - a.exactScores; })[0];
 
-  // Apostador dedicado (mais palpites feitos)
-  var maisApostas = ranking.slice().sort(function(a,b){ return b.betCount - a.betCount; })[0];
+  // Apostador dedicado (mais palpites feitos — TOTAL, não só jogos encerrados)
+  var maisApostas = ranking.slice().sort(function(a,b){ return (b.totalBets||0) - (a.totalBets||0); })[0];
 
-  // Maior pontuação em jogo único
-  var bestRound = { user: null, pts: 0, game: null };
+  // Maior pontuação em jogo único — GLOBAL, vem do RPC (cache 'best_game').
+  // (não dá pra calcular local: privacidade só sincroniza os próprios palpites)
   var finishedGames = games.filter(function(g){ return g.result && !g.tbd; });
-  Object.entries(bets).forEach(function(entry){
-    var userId = entry[0], userBets = entry[1];
-    finishedGames.forEach(function(game){
-      var bet = userBets[game.id];
-      if (!bet) return;
-      var sc = Scoring.calculate(bet, {home_score:game.result.home_score,away_score:game.result.away_score,phase:game.phase});
-      if (sc.total > bestRound.pts) {
-        bestRound = { user: ranking.find(function(r){ return r.id===userId||r.email===userId; }), pts: sc.total, game: game };
-      }
-    });
-  });
+  var bg = DB.get('best_game', null);
+  var bestRound = (bg && bg.pts > 0)
+    ? { user: { name: bg.name, company: bg.company, initials: bg.initials }, pts: bg.pts, game: { home: bg.home, away: bg.away } }
+    : { user: null, pts: 0, game: null };
 
   var copa_started = finishedGames.length > 0;
   var pc = document.getElementById('pageContent');
@@ -4928,7 +4920,7 @@ SPA.pages["hall"]={style:`.hall-hero {
     { bg:'linear-gradient(135deg,#E0E0E0,#BDBDBD)', textColor:'rgba(0,0,0,.6)',  icon:'🥈', title:'Vice-Campeão',         sub:'2º lugar no ranking final',           person: top2,        val: top2 ? top2.totalPts+' pts' : null },
     { bg:'linear-gradient(135deg,#CD9B6B,#A0522D)', textColor:'white',           icon:'🥉', title:'3º Lugar',             sub:'3º lugar no ranking final',           person: top3,        val: top3 ? top3.totalPts+' pts' : null },
     { bg:'linear-gradient(135deg,#1B2B6B,#3D5AC8)', textColor:'white',           icon:'🎯', title:'Rei dos Placares',     sub:'Mais placares exatos na Copa',        person: reiPlacares, val: reiPlacares ? reiPlacares.exactScores+' exatos' : null },
-    { bg:'linear-gradient(135deg,#7c3aed,#a855f7)', textColor:'white',           icon:'📝', title:'Palpitador Dedicado',   sub:'Mais palpites realizadas',             person: maisApostas, val: maisApostas ? maisApostas.betCount+' palpites' : null },
+    { bg:'linear-gradient(135deg,#7c3aed,#a855f7)', textColor:'white',           icon:'📝', title:'Palpitador Dedicado',   sub:'Mais palpites realizadas',             person: maisApostas, val: maisApostas ? (maisApostas.totalBets||0)+' palpites' : null },
   ];
 
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;">';
@@ -4960,7 +4952,7 @@ SPA.pages["hall"]={style:`.hall-hero {
     h += '<div style="display:flex;align-items:center;gap:14px;">';
     h += '<div style="width:48px;height:48px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;">'+bestRound.user.initials+'</div>';
     h += '<div style="flex:1;"><div style="font-weight:700;font-size:.9rem;">'+esc(bestRound.user.name)+'</div>';
-    h += '<div style="font-size:.72rem;color:#9CA3BF;">'+bestRound.esc(user.company)+' · '+flag(bestRound.game.home)+' '+bestRound.game.home+' × '+bestRound.game.away+' '+flag(bestRound.game.away)+'</div></div>';
+    h += '<div style="font-size:.72rem;color:#9CA3BF;">'+esc(bestRound.user.company)+' · '+flag(bestRound.game.home)+' '+esc(bestRound.game.home)+' × '+esc(bestRound.game.away)+' '+flag(bestRound.game.away)+'</div></div>';
     h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:2rem;font-weight:900;color:#1B2B6B;">+'+bestRound.pts+' pts</div>';
     h += '</div>';
   } else {
@@ -4998,7 +4990,11 @@ SPA.pages["hall"]={style:`.hall-hero {
   h += '</div></div>';
 
   pc.innerHTML = h;
-})();
+}
+renderHall();
+// re-sincroniza do servidor e re-renderiza (ranking p/ total de palpites, best_game p/ o card)
+if (window.syncRankingFromSupabase) syncRankingFromSupabase().then(renderHall);
+if (window.syncBestGameFromSupabase) syncBestGameFromSupabase().then(renderHall);
 
 
 }};
@@ -6189,9 +6185,20 @@ window.syncRankingFromSupabase = async function() {
       email: u.email, name: u.name, company: u.company, role: u.role, initials: u.initials,
       totalPts: u.total_pts, exactScores: u.exact_scores, correctWinners: u.correct_winners,
       goalDiff: u.goal_diff, oneTeam: u.one_team,
-      betCount: u.bet_count, avgBetTime: u.avg_bet_time, position: u.pos
+      betCount: u.bet_count, totalBets: u.total_bets, avgBetTime: u.avg_bet_time, position: u.pos
     }; });
     DB.set('ranking', mapped);
+    return true;
+  } catch(e) { return false; }
+};
+
+// Maior pontuação em um único jogo (global) — vem do RPC, sem palpite cru de ninguém.
+window.syncBestGameFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/best_single_game', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    DB.set('best_game', (rows && rows[0]) || null);
     return true;
   } catch(e) { return false; }
 };
