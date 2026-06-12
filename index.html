@@ -813,6 +813,10 @@ const FLAGS = {
 // URL da bandeira (flagcdn) ou '' — Windows não renderiza emoji de bandeira.
 // Tenta o ISO-2 do emoji do FLAGS; se faltar, usa o ISO do teamCode.
 function flagSrc(team) {
+  // Nações do Reino Unido: emoji é 🇬🇧 (UK), mas flagcdn tem as subdivisões.
+  var OVERRIDE = { 'Escócia':'gb-sct', 'Inglaterra':'gb-eng', 'País de Gales':'gb-wls', 'Irlanda do Norte':'gb-nir',
+                   'RD Congo':'cd' };  // entrada legada vinha com emoji vazio
+  if (OVERRIDE[team]) return 'https://flagcdn.com/'+OVERRIDE[team]+'.svg';
   var code = '';
   var e = FLAGS[team] || '';
   if (e) {
@@ -4202,6 +4206,7 @@ function render() {
       h += '<div style="font-size:.72rem;color:#9CA3BF;">'+esc(u.email)+'</div></div>';
       h += '<span style="background:'+(u.company==='Porter'?'rgba(27,43,107,.1)':'rgba(245,197,24,.2)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+esc(u.company)+'</span>';
       h += '<span style="background:'+(u.role==='admin'?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)')+';color:'+(u.role==='admin'?'#DC2626':'#16A34A')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+u.role+'</span>';
+      h += '<button data-userbets="'+esc(u.email)+'" style="padding:5px 10px;background:rgba(27,43,107,.06);border:1px solid rgba(27,43,107,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#1B2B6B;font-weight:700;">📝 Palpites</button>';
       h += '<button data-deleteuser="'+u.id+'" style="padding:5px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#DC2626;">🗑️</button>';
       h += '</div>';
     });
@@ -4251,6 +4256,10 @@ function step(n, title, desc) {
 
 // ── Events ───────────────────────────────────────────────────────────────────
 function bindEvents(pc) {
+  // render() roda várias vezes no MESMO #pageContent (boot + após sync).
+  // Sem guard, cada chamada empilha outro listener → 1 clique abre N modais.
+  if (pc.__adminBound) return;
+  pc.__adminBound = true;
   pc.addEventListener('click', function(e) {
 
     // Tabs
@@ -4305,6 +4314,9 @@ function bindEvents(pc) {
     }
 
     // Users tab actions
+    var userBets = e.target.closest('[data-userbets]');
+    if (userBets) { openUserBetsModal(userBets.getAttribute('data-userbets')); return; }
+
     var delUser = e.target.closest('[data-deleteuser]');
     if (delUser) {
       if (!confirm('Remover participante?')) return;
@@ -4538,6 +4550,98 @@ function openUserModal() {
     }
   });
   modal.addEventListener('click', function(e){if(e.target===modal)modal.remove();});
+}
+
+// ── Palpites do participante (admin corrige) ──────────────────────────────────
+async function openUserBetsModal(email) {
+  var ex = document.getElementById('userBetsModal'); if (ex) ex.remove(); // evita duplicado
+  var u = DB.getUsers().find(function(x){return x.email===email;}) || {name:email, email:email, initials:'?'};
+  var modal = document.createElement('div');
+  modal.id = 'userBetsModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:18px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25);">'+
+    '<div style="padding:18px 22px 12px;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;gap:10px;">'+
+      '<div style="width:34px;height:34px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.78rem;flex-shrink:0;">'+esc(u.initials||'?')+'</div>'+
+      '<div style="flex:1;min-width:0;"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:1.05rem;text-transform:uppercase;color:#1B2B6B;">Palpites de '+esc(u.name)+'</div>'+
+      '<div style="font-size:.7rem;color:#9CA3BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(email)+'</div></div>'+
+      '<button id="closeUserBets" style="background:#EEF0F6;border:none;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:1rem;flex-shrink:0;">✕</button>'+
+    '</div>'+
+    '<div id="userBetsBody" style="padding:14px 18px;overflow-y:auto;">'+
+      '<div style="padding:20px;text-align:center;color:#9CA3BF;font-size:.85rem;">⏳ Carregando palpites...</div>'+
+    '</div></div>';
+  document.body.appendChild(modal);
+  document.getElementById('closeUserBets').addEventListener('click', function(){modal.remove();});
+  modal.addEventListener('click', function(e){if(e.target===modal)modal.remove();});
+
+  // Palpites do participante vêm do servidor (RLS bets_admin permite ao admin).
+  var body = document.getElementById('userBetsBody');
+  var betsArr = [];
+  try {
+    await Sess.ensure();
+    var r = await fetch(SUPABASE_URL+'/rest/v1/bets?user_email=eq.'+encodeURIComponent(email)+'&select=game_id,home_score,away_score,saved_at', {headers: Sess.headers(false)});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    betsArr = await r.json();
+  } catch(e) {
+    body.innerHTML = '<div style="padding:18px;color:#DC2626;font-size:.82rem;">❌ Erro ao carregar palpites: '+esc(e.message)+'</div>';
+    return;
+  }
+  var betMap = {};
+  betsArr.forEach(function(b){ betMap[b.game_id] = b; });
+
+  var games = DB.getGames().filter(function(g){ return !g.tbd && g.home && g.away; })
+    .sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+
+  var h = '<div style="font-size:.72rem;color:#9CA3BF;margin-bottom:10px;">Edite o placar e salve. Mantém o horário original do palpite; o ranking recalcula no servidor.</div>';
+  games.forEach(function(g){
+    var b = betMap[g.id];
+    var bh = b && b.home_score!=null ? b.home_score : '';
+    var ba = b && b.away_score!=null ? b.away_score : '';
+    var res = g.result ? (g.result.home_score+'×'+g.result.away_score) : '—';
+    h += '<div style="display:flex;align-items:center;gap:7px;padding:8px 4px;border-bottom:1px solid #F1F3F8;">';
+    h += '<div style="flex:1;min-width:0;font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+flag(g.home)+' '+esc(g.home)+' × '+esc(g.away)+' '+flag(g.away)+'</div>';
+    h += '<span style="font-size:.6rem;color:#9CA3BF;white-space:nowrap;" title="Resultado oficial">R:'+res+'</span>';
+    h += '<input id="ab-h-'+g.id+'" type="number" min="0" value="'+bh+'" style="width:36px;padding:5px 2px;border:1.5px solid #DDE1EE;border-radius:7px;text-align:center;font-size:.85rem;"/>';
+    h += '<span style="color:#9CA3BF;font-size:.75rem;">×</span>';
+    h += '<input id="ab-a-'+g.id+'" type="number" min="0" value="'+ba+'" style="width:36px;padding:5px 2px;border:1.5px solid #DDE1EE;border-radius:7px;text-align:center;font-size:.85rem;"/>';
+    h += '<button data-savebet="'+g.id+'" style="padding:5px 9px;background:#1B2B6B;color:white;border:none;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">Salvar</button>';
+    h += '</div>';
+  });
+  body.innerHTML = h;
+
+  body.addEventListener('click', function(e){
+    var sv = e.target.closest('[data-savebet]');
+    if (!sv) return;
+    var gid = sv.getAttribute('data-savebet');
+    var hv = document.getElementById('ab-h-'+gid).value;
+    var av = document.getElementById('ab-a-'+gid).value;
+    if (hv===''||av===''){ Utils.toast('Preencha os dois placares','error'); return; }
+    var prev = betMap[gid];
+    adminSaveBet(email, gid, parseInt(hv,10), parseInt(av,10), prev&&prev.saved_at, sv, betMap);
+  });
+}
+
+// Upsert do palpite com o user_email do PARTICIPANTE (não o do admin).
+async function adminSaveBet(email, gameId, hs, as, savedAt, btn, betMap) {
+  var orig = btn.textContent; btn.disabled = true; btn.textContent = '...';
+  var payload = { user_email: email, game_id: gameId, home_score: hs, away_score: as, saved_at: savedAt || new Date().toISOString() };
+  try {
+    await Sess.ensure();
+    var res = await fetch(SUPABASE_URL+'/rest/v1/bets?on_conflict=user_email,game_id', {
+      method:'POST',
+      headers: Object.assign({}, Sess.headers(), {'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) { var t = await res.text(); throw new Error(res.status+' '+t.slice(0,90)); }
+    if (betMap) betMap[gameId] = {game_id:gameId, home_score:hs, away_score:as, saved_at:payload.saved_at};
+    btn.textContent = '✓'; btn.style.background = '#16A34A';
+    Utils.toast('Palpite corrigido ✓','success');
+    if (window.syncRankingFromSupabase) await syncRankingFromSupabase();
+    setTimeout(function(){ btn.disabled=false; btn.textContent=orig; btn.style.background='#1B2B6B'; }, 1200);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = orig;
+    Utils.toast('Falha ao salvar: '+e.message,'error');
+  }
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
