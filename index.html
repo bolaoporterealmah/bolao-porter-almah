@@ -3555,38 +3555,21 @@ SPA.pages["ranking"]={style:``,script:function(){
 
   function render() {
     var ranking = DB.getRanking();
-    var allBets = DB.getBets();
-    var games = DB.getGames().filter(function(g){ return g.result && !g.tbd; });
     var myRank = ranking.find(function(r){ return r.email === user.email; }) || {position:'—',totalPts:0,exactScores:0,betCount:0};
     var companies = [];
     ranking.forEach(function(r){ if(companies.indexOf(esc(r.company))<0) companies.push(esc(r.company)); });
     var filtered = filterCompany==='all' ? ranking : ranking.filter(function(r){ return esc(r.company)===filterCompany; });
 
-    // Build detailed stats per user from bets
-    var statsMap = {};
-    ranking.forEach(function(r) {
-      var userBets = allBets[r.id] || allBets[r.email] || {};
-      var exact=0, winner=0, goalDiff=0, oneTeam=0;
-      games.forEach(function(g) {
-        var bet = userBets[g.id];
-        if (!bet) return;
-        var sc = Scoring.calculate(bet, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase});
-        sc.breakdown.forEach(function(b) {
-          if (b.label==='Placar exato') exact++;
-          if (b.label==='Acertou vencedor'||b.label==='Acertou empate') winner++;
-          if (b.label==='Saldo de gols') goalDiff++;
-          if (b.label==='Gols de um time') oneTeam++;
-        });
-      });
-      statsMap[r.id||r.email] = {exact:exact, winner:winner, goalDiff:goalDiff, oneTeam:oneTeam};
-    });
+    // Stats vêm AGREGADOS do servidor (RPC). Não dá p/ recomputar local:
+    // privacidade só sincroniza os próprios palpites, não os alheios.
+    function rStats(r){ return {exact:r.exactScores||0, winner:r.correctWinners||0, goalDiff:r.goalDiff||0, oneTeam:r.oneTeam||0}; }
 
     var pc = document.getElementById('pageContent');
     if (!pc) return;
     var h = '';
 
     // My stats
-    var myStats = statsMap[user.id||user.email] || {exact:0,winner:0,goalDiff:0,oneTeam:0};
+    var myStats = rStats(myRank);
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px;">';
     h += sCard('Minha Posição', myRank.position+(myRank.position!=='—'?'º':''), '#D4A80F');
     h += sCard('Minha Pontuação', myRank.totalPts+' pts', '#1B2B6B');
@@ -3649,7 +3632,7 @@ SPA.pages["ranking"]={style:``,script:function(){
 
     filtered.forEach(function(r) {
       var isMe = r.email === user.email;
-      var st = statsMap[r.id||r.email] || {exact:0,winner:0,goalDiff:0,oneTeam:0};
+      var st = rStats(r);
       var posBg = r.position===1?'linear-gradient(135deg,#FFD700,#FFA500)':r.position===2?'linear-gradient(135deg,#C0C0C0,#A8A8A8)':r.position===3?'linear-gradient(135deg,#CD7F32,#A0522D)':'#EEF0F6';
       var posColor = r.position<=3?'white':'#5A6385';
 
@@ -4537,6 +4520,8 @@ function exportCsv() {
 }
 
 render();
+// admin: carrega a lista de perfis sob demanda (não vem no boot)
+if (Auth.isAdmin() && window.syncProfilesFromSupabase) syncProfilesFromSupabase().then(render);
 })();
 
 }};
@@ -5450,6 +5435,8 @@ function saveFinalResults() {
 }
 
 render();
+// config (admin): carrega a lista de perfis sob demanda
+if (Auth.isAdmin() && window.syncProfilesFromSupabase) syncProfilesFromSupabase().then(render);
 
 
 }};
@@ -5626,10 +5613,9 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       displayGames = upcoming;
     }
 
-    // Count total bets in system
-    var totalBets = 0;
-    Object.values(allBets).forEach(function(ub){ totalBets += Object.keys(ub).length; });
-    var usersWithBets = Object.keys(allBets).filter(function(e){ return Object.keys(allBets[e]).length > 0; }).length;
+    // Conta só os SEUS palpites (privacidade — sem dados de outros)
+    var myAll = allBets[user.email] || {};
+    var myBetsCount = Object.keys(myAll).length;
 
     var h = '';
 
@@ -5639,12 +5625,8 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
     h += '<div style="font-size:.82rem;opacity:.75;margin-top:2px;">'+displayLabel+'</div></div>';
     h += '<div style="display:flex;gap:12px;">';
     h += '<div style="text-align:center;background:rgba(255,255,255,.15);padding:8px 14px;border-radius:10px;">';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;">'+usersWithBets+'</div>';
-    h += '<div style="font-size:.65rem;opacity:.75;text-transform:uppercase;letter-spacing:.5px;">palpitadores</div>';
-    h += '</div>';
-    h += '<div style="text-align:center;background:rgba(255,255,255,.15);padding:8px 14px;border-radius:10px;">';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;">'+totalBets+'</div>';
-    h += '<div style="font-size:.65rem;opacity:.75;text-transform:uppercase;letter-spacing:.5px;">palpites</div>';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;">'+myBetsCount+'</div>';
+    h += '<div style="font-size:.65rem;opacity:.75;text-transform:uppercase;letter-spacing:.5px;">seus palpites</div>';
     h += '</div>';
     h += '</div></div>';
 
@@ -5698,29 +5680,17 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
       h += '</div>';
 
       // Bets table
-      var betters = users.filter(function(u){
-        var ub = allBets[u.email] || allBets[u.id] || {};
-        return !!ub[game.id];
-      });
-      var noBet = users.filter(function(u){
-        var ub = allBets[u.email] || allBets[u.id] || {};
-        return !ub[game.id];
-      });
+      // privacidade: só o SEU palpite (nunca os de outros)
+      var myUser = { email:user.email, name:user.name, company:user.company, initials:user.initials, role:user.role };
+      var myUb = allBets[user.email] || {};
+      var betters = myUb[game.id] ? [myUser] : [];
+      var noBet   = myUb[game.id] ? [] : [myUser];
 
-      // Summary bar
-      h += '<div style="padding:8px 16px;background:#F8F9FC;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;justify-content:space-between;">';
-      h += '<span style="font-size:.75rem;color:#5A6385;font-weight:600;">'+betters.length+' de '+users.length+' palpitaram</span>';
-      // Progress bar
-      var pct = users.length > 0 ? Math.round(betters.length/users.length*100) : 0;
-      h += '<div style="display:flex;align-items:center;gap:8px;">';
-      h += '<div style="width:100px;height:6px;background:#DDE1EE;border-radius:99px;overflow:hidden;">';
-      h += '<div style="height:100%;background:'+(pct>=80?'#22C55E':pct>=50?'#F59E0B':'#3D5AC8')+';border-radius:99px;width:'+pct+'%;"></div>';
-      h += '</div>';
-      h += '<span style="font-size:.72rem;font-weight:700;color:#5A6385;">'+pct+'%</span>';
-      h += '</div></div>';
+      // Status do SEU palpite (sem dados de outros)
+      h += '<div style="padding:8px 16px;background:#F8F9FC;border-bottom:1px solid #EEF0F6;font-size:.75rem;font-weight:600;color:'+(betters.length?'#16A34A':'#92400E')+';">'+(betters.length?'✓ Você palpitou':'⏳ Você ainda não palpitou')+'</div>';
 
       if (betters.length === 0) {
-        h += '<div style="padding:18px;text-align:center;font-size:.82rem;color:#9CA3BF;font-style:italic;">Nenhum palpite registrado ainda para este jogo</div>';
+        h += '<div style="padding:18px;text-align:center;font-size:.82rem;color:#9CA3BF;font-style:italic;">Você ainda não palpitou neste jogo</div>';
       } else {
         // Table header
         h += '<div style="overflow-x:auto;max-height:400px;overflow-y:auto;">';
@@ -5792,14 +5762,6 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
         });
 
         h += '</tbody></table></div>';
-      }
-
-      // Who hasn't bet yet (only show if game is still open)
-      if (!isFinished && canBet && noBet.length > 0) {
-        h += '<div style="padding:10px 16px;background:#FFF8F0;border-top:1px solid #FEE2A0;">';
-        h += '<span style="font-size:.72rem;font-weight:700;color:#92400E;">⏳ Ainda não palpitaram ('+noBet.length+'): </span>';
-        h += '<span style="font-size:.72rem;color:#B45309;">'+noBet.slice(0,5).map(function(u){return u.name.split(' ')[0];}).join(', ')+(noBet.length>5?' e mais '+(noBet.length-5)+'...':'')+'</span>';
-        h += '</div>';
       }
 
       h += '</div>'; // game card
@@ -5946,12 +5908,7 @@ async function initSupabase() {
       await seedGamesToSupabase();
     }
 
-    // Load users (profiles — sem senha)
-    var users = await SB.get('profiles', 'select=*');
-    if (users && users.length > 0) {
-      DB.set('users', users);
-      console.log('[Supabase] Loaded', users.length, 'profiles');
-    }
+    // (perfis de TODOS não são carregados no boot — só admin carrega, sob demanda)
 
     // Bets: SÓ os próprios (delega p/ syncBetsFromSupabase, que também busca o ranking via RPC)
     if (window.syncBetsFromSupabase) await syncBetsFromSupabase();
@@ -6099,6 +6056,7 @@ window.syncRankingFromSupabase = async function() {
     var mapped = (rows || []).map(function(u){ return {
       email: u.email, name: u.name, company: u.company, role: u.role, initials: u.initials,
       totalPts: u.total_pts, exactScores: u.exact_scores, correctWinners: u.correct_winners,
+      goalDiff: u.goal_diff, oneTeam: u.one_team,
       betCount: u.bet_count, avgBetTime: u.avg_bet_time, position: u.pos
     }; });
     DB.set('ranking', mapped);
