@@ -562,22 +562,57 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 @media (max-width: 768px) {
+  body { overflow-x: hidden; }
   .menu-toggle { display: flex; }
   .sidebar {
     transform: translateX(-100%);
+    width: 240px;
   }
   .sidebar.open {
     transform: translateX(0);
     box-shadow: var(--shadow-xl);
   }
-  .main-content { margin-left: 0; }
-  .page-content { padding: 16px; }
+  /* Backdrop escurece a página quando o menu abre */
+  .sidebar.open::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: -1;
+  }
+  .main-content { margin-left: 0; min-width: 0; }
+  .page-content { padding: 14px; }
   .stat-cards { grid-template-columns: repeat(2, 1fr); }
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 12px; }
+  .topbar-title { font-size: 0.95rem; }
+
+  /* Colapsa grids inline de 2+ colunas em coluna única */
+  [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
+  [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+  [style*="grid-template-columns:repeat(4"] { grid-template-columns: repeat(2,1fr) !important; }
+  [style*="grid-template-columns:repeat(2"] { grid-template-columns: 1fr !important; }
+
+  /* Tabelas largas: rolagem horizontal, nunca estoura a página */
+  table { max-width: 100%; }
+
+  /* Classificação dos grupos compacta */
+  .groups-grid { grid-template-columns: 1fr !important; }
+  .stand-table { font-size: 0.7rem; }
+  .stand-table th, .stand-table td { padding: 6px 2px; }
+  .stand-table td.team-col, .stand-table th.team-col { white-space: nowrap; }
+
+  /* Bracket scroll já existe; garante respiro */
+  .bracket-stage { min-width: 150px; }
+
+  /* Score inputs menores no card de palpite */
+  .score-input { width: 48px; height: 48px; font-size: 1.3rem; }
 }
 
 @media (max-width: 480px) {
   .stat-cards { grid-template-columns: 1fr; }
+  .page-content { padding: 12px; }
+  [style*="grid-template-columns:repeat(4"] { grid-template-columns: 1fr 1fr !important; }
+  .topbar-title { font-size: 0.85rem; }
 }
 
 /* ─── ANIMATIONS ─── */
@@ -2591,6 +2626,16 @@ var SPA={
         if(act==='togglesidebar'){var s=document.getElementById('sidebar');if(s)s.classList.toggle('open');}
       });
     }
+    // Fecha o menu mobile ao tocar fora (registrado uma vez)
+    if(!window._sidebarOutsideClose){
+      window._sidebarOutsideClose=true;
+      document.addEventListener('click',function(e){
+        var s=document.getElementById('sidebar');
+        if(!s||!s.classList.contains('open'))return;
+        if(e.target.closest('#sidebar')||e.target.closest('[data-action="togglesidebar"]'))return;
+        s.classList.remove('open');
+      });
+    }
   }
 ,
   logout:function(){Sess.clear();this.navigate('login');}
@@ -2624,18 +2669,26 @@ SPA.pages["login"]={style:`.login-bg {
 
 .login-wrap {
   position: relative; z-index: 1;
-  display: flex;
-  width: 100%; max-width: 440px;
-  margin: 20px;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 100vh;
+  padding: 20px;
 }
 
 .login-card {
   background: white;
   border-radius: var(--radius-xl);
   padding: 40px 40px 36px;
-  width: 100%;
+  width: 100%; max-width: 440px;
   box-shadow: 0 30px 80px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.2);
   animation: fadeInUp 0.5s ease;
+}
+
+@media (max-width: 480px) {
+  .login-wrap { padding: 14px; }
+  .login-card { padding: 26px 20px 24px; }
+  .login-logo { margin-bottom: 18px; }
+  .login-hero { padding: 16px; margin-bottom: 20px; }
+  .login-hero .copa-title { font-size: 1.5rem; }
 }
 
 .login-logo { text-align: center; margin-bottom: 28px; }
@@ -2787,7 +2840,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
     h += '<div><div style="font-size:.78rem;opacity:.7;margin-bottom:4px;">Olá, '+esc(user.name).split(' ')[0]+' 👋</div>';
     h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;line-height:1.1;">Copa do Mundo<br/>FIFA 2026</div>';
     h += '<div style="font-size:.78rem;opacity:.6;margin-top:4px;">USA · Canada · México &nbsp;|&nbsp; Porter & Almah</div></div>';
-    h += '<div style="display:flex;gap:10px;flex-shrink:0;">';
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
     h += '<button data-nav="palpites" style="padding:11px 20px;background:#F5C518;color:#1B2B6B;border:none;border-radius:10px;font-weight:800;font-size:.9rem;cursor:pointer;">⚽ Palpitar</button>';
     h += '<button data-nav="ranking" style="padding:11px 20px;background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.4);border-radius:10px;font-weight:700;font-size:.9rem;cursor:pointer;">🏆 Ranking</button>';
     h += '</div></div></div>';
@@ -4842,6 +4895,7 @@ function render() {
             <span>Grupo ${letter}</span>
             <span style="font-size:0.65rem;opacity:0.7;">${played > 0 ? played+' jogo(s)' : g.teams.length+' times'}</span>
           </div>
+          <div style="overflow-x:auto;">
           <table class="stand-table">
             <thead>
               <tr>
@@ -4874,6 +4928,7 @@ function render() {
               `).join('')}
             </tbody>
           </table>
+          </div>
         </div>`;
       }).join('')}
     </div>
