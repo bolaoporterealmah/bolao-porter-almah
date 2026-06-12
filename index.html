@@ -999,14 +999,8 @@ const DB = {
 };
 
 // ─── DEFAULT DATA ────────────────────────────────────────────────────────────
-const DEFAULT_USERS = [
-  { id: 'u1', name: 'João Silva', email: 'joao@porter.com.br', company: 'Porter', role: 'participant', initials: 'JS' },
-  { id: 'u2', name: 'Ana Costa', email: 'ana@almah.com.br', company: 'Almah', role: 'participant', initials: 'AC' },
-  { id: 'u3', name: 'Carlos Mendes', email: 'carlos@porter.com.br', company: 'Porter', role: 'participant', initials: 'CM' },
-  { id: 'u4', name: 'Beatriz Lima', email: 'bia@almah.com.br', company: 'Almah', role: 'participant', initials: 'BL' },
-  { id: 'u5', name: 'Rafael Souza', email: 'rafael@porter.com.br', company: 'Porter', role: 'participant', initials: 'RS' },
-  { id: 'u6', name: 'Admin Porter', email: 'admin@porter.com.br', company: 'Porter', role: 'admin', initials: 'AP' },
-];
+// Sem usuários fixos: a fonte de verdade é o Supabase (profiles via RPC/admin sync).
+const DEFAULT_USERS = [];
 
 const DEFAULT_GAMES = [
   {
@@ -2363,25 +2357,7 @@ const DEFAULT_GAMES = [
   }
 ];
 
-// Seed demo bets on first 8 group games (open, no result yet)
-(function seedDemoBets() {
-  const bets = DB.getBets();
-  if (Object.keys(bets).length > 0) return;
-  const openGames = DEFAULT_GAMES.filter(g => !g.result && !g.tbd).slice(0, 8);
-  const users = DEFAULT_USERS.filter(u => u.role === 'participant');
-  const seedBets = {};
-  users.forEach(user => {
-    seedBets[user.id] = {};
-    openGames.forEach(game => {
-      seedBets[user.id][game.id] = {
-        home_score: Math.floor(Math.random() * 4),
-        away_score: Math.floor(Math.random() * 3),
-        savedAt: Date.now() - Math.random() * 1000 * 3600 * 24
-      };
-    });
-  });
-  DB.saveBets(seedBets);
-})();
+// (seedDemoBets removido — palpites vêm do Supabase, sem dados fake)
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 const Utils = {
