@@ -2519,7 +2519,13 @@ var SPA={
     if(!page||!this.pages[page])page='login';
     var raw=localStorage.getItem('bolao_user'),user=raw?JSON.parse(raw):null;
     if(page!=='login'&&!user){this.navigate('login');return;}
-    if((page==='admin'||page==='config')&&user&&user.role!=='admin'){this.navigate('dashboard');return;}
+    if(page==='admin'||page==='config'){
+      // gate local (cosmético) + confirmação no servidor (localStorage é burlável)
+      if(!user||user.role!=='admin'){this.navigate('dashboard');return;}
+      Auth.verifyAdmin().then(function(ok){
+        if(ok===false){ try{Utils.toast('Acesso negado: você não é administrador.','error');}catch(e){} Auth.logout(); }
+      });
+    }
     this.current=page;
     var se=document.getElementById('__ps__');
     if(!se){se=document.createElement('style');se.id='__ps__';document.head.appendChild(se);}
@@ -5822,6 +5828,18 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
 
 Auth.init=function(){var r=localStorage.getItem('bolao_user');if(!r){SPA.navigate('login');return false;}this.user=JSON.parse(r);return true;};
 Auth.logout=function(){Sess.clear();SPA.navigate('login');};
+// Confirma admin no SERVIDOR (profiles.role via JWT). Tri-state:
+//   true = admin · false = NÃO admin (confirmado) · null = inconclusivo (rede/401)
+Auth.verifyAdmin=async function(){
+  var uid=this.user&&this.user.id; if(!uid) return false;
+  try{
+    await Sess.ensure();              // renova o JWT se estiver perto de expirar
+    var r=await fetch(SUPABASE_URL+'/rest/v1/profiles?id=eq.'+encodeURIComponent(uid)+'&select=role&limit=1',{headers:Sess.headers(false)});
+    if(!r.ok) return null;            // 401/erro: não conclui (RLS ainda barra ações)
+    var rows=await r.json();
+    return !!(rows&&rows[0]&&rows[0].role==='admin');
+  }catch(e){ return null; }           // rede caiu: não desloga à toa
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // SUPABASE LAYER — dados compartilhados em tempo real
