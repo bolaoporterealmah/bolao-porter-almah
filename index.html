@@ -811,7 +811,15 @@ const FLAGS = {
 };
 
 function flag(team) {
-  return FLAGS[team] || '';
+  // Windows não renderiza emoji de bandeira → vira <img> do flagcdn.
+  // Deriva o ISO-2 do próprio emoji (regional indicators), sem mapa extra.
+  var e = FLAGS[team] || '';
+  if (!e) return '';
+  var cp = Array.from(e).map(function(c){ return c.codePointAt(0); });
+  if (cp.length < 2 || cp[0] < 0x1F1E6) return e; // não é bandeira: devolve cru
+  var cc = (String.fromCharCode(cp[0]-0x1F1E6+65) + String.fromCharCode(cp[1]-0x1F1E6+65)).toLowerCase();
+  return '<img src="https://flagcdn.com/'+cc+'.svg" alt="'+team+'" loading="lazy" '+
+    'style="height:1em;width:auto;vertical-align:-0.15em;display:inline-block;border-radius:2px;box-shadow:0 0 1px rgba(0,0,0,.3);">';
 }
 
 // 2-letter country code for team buttons
