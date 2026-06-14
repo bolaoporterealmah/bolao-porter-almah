@@ -100,6 +100,8 @@
 <template id="tpl-resultados"><div class="app-layout"><aside class="sidebar" id="sidebar"></aside><div class="main-content"><header class="topbar"></header><div class="page-content" id="pageContent"><div class="page-loader"><div class="loader"></div></div></div></div></div></template>
 <div id="spa-root"></div>
 <div class="toast-container" id="toastContainer"></div>
-<script src="app.js?v=3"></script>
+<!-- ÚNICO ponto de versão: bump aqui recarrega todos os js (fura cache de CDN/navegador) -->
+<script>window.APP_VERSION='5';</script>
+<script src="js/loader.js?v=5"></script>
 </body>
 </html>
