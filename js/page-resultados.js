@@ -31,7 +31,7 @@ SPA.pages["resultados"]={style:``,script:function(){
     games.forEach(function(g){
       var bet = myBets[g.id];
       var sc = bet ? Scoring.calculate(bet, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase}) : null;
-      h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
+      h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;display:flex;flex-direction:column;">';
       // header: fase + data
       h += '<div style="padding:9px 14px;background:#F8F9FC;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;justify-content:space-between;">';
       h += '<span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1B2B6B;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+'</span>';
@@ -57,11 +57,12 @@ SPA.pages["resultados"]={style:``,script:function(){
       // cravadores: só quem acertou o placar exato deste jogo (destaque + parabéns)
       var cravadores = scorers[g.id] || [];
       if (cravadores.length) {
-        h += '<div style="border-top:1px dashed #E5C100;background:linear-gradient(135deg,rgba(245,197,24,.14),rgba(34,197,94,.08));">';
-        // header fixo
-        h += '<div style="display:flex;align-items:center;gap:6px;padding:10px 14px 8px;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:#B8860B;">🎯 Cravaram o placar <span style="background:#F5C518;color:#1B2B6B;border-radius:99px;padding:1px 8px;font-size:.7rem;line-height:1.5;">'+cravadores.length+'</span></div>';
-        // lista: 1 por linha, altura p/ ~10 usuários, scroll interno se passar
-        h += '<div style="display:flex;flex-direction:column;gap:5px;max-height:330px;overflow-y:auto;padding:0 14px;">';
+        // bloco preenche todo o resto do card (flex:1): header topo, lista meio, parabéns fundo
+        h += '<div style="flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px dashed #E5C100;background:linear-gradient(135deg,rgba(245,197,24,.14),rgba(34,197,94,.08));">';
+        // header fixo (topo)
+        h += '<div style="flex-shrink:0;display:flex;align-items:center;gap:6px;padding:10px 14px 8px;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:#B8860B;">🎯 Cravaram o placar <span style="background:#F5C518;color:#1B2B6B;border-radius:99px;padding:1px 8px;font-size:.7rem;line-height:1.5;">'+cravadores.length+'</span></div>';
+        // lista: cap ~10 linhas, scroll interno se passar; não estica (footer vai pro fundo via margin-top:auto)
+        h += '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:5px;max-height:330px;overflow-y:auto;padding:0 14px 4px;">';
         cravadores.forEach(function(c){
           var ini = esc(c.initials || (c.name ? c.name.split(' ').slice(0,2).map(function(n){return n[0];}).join('').toUpperCase() : '?'));
           h += '<div style="display:flex;align-items:center;gap:8px;background:white;border:1.5px solid #F5C518;border-radius:99px;padding:3px 12px 3px 3px;box-shadow:0 1px 3px rgba(0,0,0,.06);">';
@@ -71,11 +72,16 @@ SPA.pages["resultados"]={style:``,script:function(){
           h += '</div>';
         });
         h += '</div>';
-        // footer fixo
-        h += '<div style="font-size:.68rem;color:#16A34A;font-weight:700;padding:8px 14px 12px;">🎉 Parabéns! +15 pts de placar exato.</div>';
+        // footer fixo (fundo) — margin-top:auto cola no rodapé do card
+        h += '<div style="flex-shrink:0;margin-top:auto;font-size:.68rem;color:#16A34A;font-weight:700;padding:8px 14px 12px;border-top:1px solid rgba(229,193,0,.35);">🎉 Parabéns! +15 pts de placar exato.</div>';
         h += '</div>';
       } else {
-        h += '<div style="padding:9px 14px;border-top:1px solid #EEF0F6;background:#FAFBFD;display:flex;align-items:center;gap:6px;font-size:.72rem;color:#9CA3BF;font-weight:600;">😬 Ninguém cravou este placar.</div>';
+        // ninguém cravou: preenche o card todo (bg cobre tudo) com estado triste
+        h += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-top:1px solid #EEF0F6;background:linear-gradient(135deg,#F4F5F9,#E7E9F1);padding:24px 18px;text-align:center;">';
+        h += '<div style="font-size:2rem;opacity:.5;line-height:1;">😢</div>';
+        h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px;color:#9CA3BF;">Ninguém cravou</div>';
+        h += '<div style="font-size:.7rem;color:#AEB4C7;">Nenhum participante acertou o placar exato</div>';
+        h += '</div>';
       }
 
       h += '</div>';
