@@ -379,6 +379,20 @@ window.syncBestGameFromSupabase = async function() {
   } catch(e) { return false; }
 };
 
+// Movimento do ranking (▲▼). RPC ranking_movement devolve a posição ANTERIOR de cada
+// participante (snapshot tirado antes do último placar). delta = prev - atual no client.
+window.syncRankingMovementFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ranking_movement', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    var map = {};
+    (rows || []).forEach(function(x){ if (x.email != null && x.prev_position != null) map[x.email] = x.prev_position; });
+    DB.set('ranking_movement', map);
+    return true;
+  } catch(e) { return false; }
+};
+
 // Quem cravou o placar exato, por jogo (global). Vem do RPC exact_scorers (SECURITY DEFINER):
 // só retorna palpites que BATERAM com o resultado de jogos já encerrados — nunca palpite cru de quem errou.
 window.syncExactScorersFromSupabase = async function() {
