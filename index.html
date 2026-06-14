@@ -3777,10 +3777,10 @@ SPA.pages["ranking"]={style:``,script:function(){
       h += '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;background:'+posBg+';color:'+posColor+';">'+r.position+'</div>';
       h += '</td>';
 
-      h += '<td style="padding:10px 12px;">';
+      h += '<td data-userbets="'+esc(r.email)+'" title="Ver resultados palpitados" style="padding:10px 12px;cursor:pointer;">';
       h += '<div style="display:flex;align-items:center;gap:8px;">';
       h += '<div style="width:30px;height:30px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;color:white;flex-shrink:0;">'+esc(r.initials)+'</div>';
-      h += '<div><div style="font-weight:600;font-size:.85rem;">'+esc(r.name)+(isMe?' <span style="font-size:.6rem;color:#3D5AC8">(você)</span>':'')+'</div>';
+      h += '<div><div style="font-weight:600;font-size:.85rem;color:#1B2B6B;text-decoration:underline;text-decoration-color:#DDE1EE;text-underline-offset:2px;">'+esc(r.name)+(isMe?' <span style="font-size:.6rem;color:#3D5AC8">(você)</span>':'')+' <span style="font-size:.6rem;opacity:.5;">👁️</span></div>';
       h += '<div style="font-size:.68rem;color:#9CA3BF;">'+esc(r.company)+'</div></div></div>';
       h += '</td>';
 
@@ -3823,7 +3823,9 @@ SPA.pages["ranking"]={style:``,script:function(){
 
     pc.addEventListener('click', function(e) {
       var btn = e.target.closest('[data-rankfilter]');
-      if (btn) { filterCompany = btn.getAttribute('data-rankfilter'); render(); }
+      if (btn) { filterCompany = btn.getAttribute('data-rankfilter'); render(); return; }
+      var ub = e.target.closest('[data-userbets]');
+      if (ub) { openParticipantResultsModal(ub.getAttribute('data-userbets')); }
     });
   }
 
@@ -4452,7 +4454,7 @@ async function fetchFromApi() {
 
     if (selectedApi === 'thesportsdb') {
       // TheSportsDB free API - FIFA World Cup 2026
-      var res = await fetch('https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=4480&s=2026');
+      var res = await fetch('https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=4429&s=2026');
       var data = await res.json();
       if (data && data.events) {
         data.events.forEach(function(ev) {
@@ -4741,6 +4743,93 @@ async function adminSaveBet(email, gameId, hs, as, savedAt, btn, betMap) {
     btn.disabled = false; btn.textContent = orig;
     Utils.toast('Falha ao salvar: '+e.message,'error');
   }
+}
+
+// ── Resultados palpitados por um participante (público, só jogos encerrados) ───
+// Fonte: RPC user_finished_bets (SECURITY DEFINER) — só devolve palpites de jogos já
+// encerrados. Palpite de jogo em aberto NUNCA é exposto (privacidade preservada).
+async function openParticipantResultsModal(email) {
+  var ex = document.getElementById('participantResultsModal'); if (ex) ex.remove();
+  var u = DB.getRanking().find(function(x){return x.email===email;})
+       || DB.getUsers().find(function(x){return x.email===email;})
+       || {name:email, email:email, initials:'?', company:''};
+  var modal = document.createElement('div');
+  modal.id = 'participantResultsModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:18px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25);">'+
+    '<div style="padding:18px 22px 12px;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;gap:10px;">'+
+      '<div style="width:38px;height:38px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.82rem;flex-shrink:0;">'+esc(u.initials||'?')+'</div>'+
+      '<div style="flex:1;min-width:0;"><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:1.05rem;text-transform:uppercase;color:#1B2B6B;">'+esc(u.name)+'</div>'+
+      '<div style="font-size:.7rem;color:#9CA3BF;">Resultados palpitados · jogos encerrados</div></div>'+
+      '<button id="closePartRes" style="background:#EEF0F6;border:none;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:1rem;flex-shrink:0;">✕</button>'+
+    '</div>'+
+    '<div id="partResBody" style="padding:14px 18px;overflow-y:auto;">'+
+      '<div style="padding:20px;text-align:center;color:#9CA3BF;font-size:.85rem;">⏳ Carregando...</div>'+
+    '</div></div>';
+  document.body.appendChild(modal);
+  document.getElementById('closePartRes').addEventListener('click', function(){modal.remove();});
+  modal.addEventListener('click', function(e){if(e.target===modal)modal.remove();});
+
+  var body = document.getElementById('partResBody');
+  var betsArr = [];
+  try {
+    await Sess.ensure();
+    var r = await fetch(SUPABASE_URL+'/rest/v1/rpc/user_finished_bets', {
+      method:'POST', headers: Sess.headers(), body: JSON.stringify({p_email: email})
+    });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    betsArr = await r.json();
+  } catch(e) {
+    body.innerHTML = '<div style="padding:18px;color:#DC2626;font-size:.82rem;">❌ Erro ao carregar: '+esc(e.message)+'</div>';
+    return;
+  }
+
+  var betMap = {};
+  betsArr.forEach(function(b){ betMap[b.game_id] = b; });
+
+  var games = DB.getGames()
+    .filter(function(g){ return g.result && !g.tbd && betMap[g.id]; })
+    .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+
+  if (!games.length) {
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9CA3BF;font-size:.85rem;">Nenhum palpite em jogos encerrados ainda.</div>';
+    return;
+  }
+
+  var totalPts = 0, exactCount = 0;
+  var rows = '';
+  games.forEach(function(g){
+    var b = betMap[g.id];
+    var sc = Scoring.calculate(b, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase});
+    var pts = sc ? sc.total : 0;
+    totalPts += pts;
+    var isExact = !!(sc && sc.base === 15);
+    if (isExact) exactCount++;
+    rows += '<div style="border:1px solid '+(isExact?'#F5C518':'#EEF0F6')+';border-radius:11px;padding:10px 12px;margin-bottom:8px;'+(isExact?'background:linear-gradient(135deg,rgba(245,197,24,.1),rgba(34,197,94,.06));':'')+'">';
+    rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">';
+    rows += '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+'</span>';
+    rows += '<span style="font-size:.62rem;color:#9CA3BF;">'+Utils.formatDate(g.date)+'</span>';
+    rows += '</div>';
+    rows += '<div style="display:flex;align-items:center;gap:10px;">';
+    rows += '<div style="flex:1;text-align:right;font-size:.8rem;font-weight:700;color:#2D3557;">'+esc(g.home)+' '+flag(g.home)+'</div>';
+    rows += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.3rem;font-weight:900;color:#1B2B6B;white-space:nowrap;">'+g.result.home_score+' × '+g.result.away_score+'</div>';
+    rows += '<div style="flex:1;text-align:left;font-size:.8rem;font-weight:700;color:#2D3557;">'+flag(g.away)+' '+esc(g.away)+'</div>';
+    rows += '</div>';
+    rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #EEF0F6;font-size:.74rem;">';
+    rows += '<span style="color:#5A6385;">Palpite: <strong style="color:#2D3557;">'+b.home_score+' × '+b.away_score+'</strong>'+(isExact?' 🎯':'')+'</span>';
+    rows += '<span style="background:'+(pts>0?'rgba(34,197,94,.12)':'rgba(0,0,0,.05)')+';color:'+(pts>0?'#16A34A':'#9CA3BF')+';padding:2px 10px;border-radius:99px;font-weight:800;">'+(pts>0?'+'+pts+' pts':'0 pts')+'</span>';
+    rows += '</div>';
+    rows += '</div>';
+  });
+
+  var head = '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Jogos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#1B2B6B;line-height:1;">'+games.length+'</div></div>';
+  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Exatos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#16A34A;line-height:1;">'+exactCount+'</div></div>';
+  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Pontos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#D4A80F;line-height:1;">'+totalPts+'</div></div>';
+  head += '</div>';
+
+  body.innerHTML = head + rows;
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
@@ -5284,6 +5373,7 @@ SPA.pages["resultados"]={style:``,script:function(){
       .filter(function(g){ return g.result && !g.tbd; })
       .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
     var myBets = DB.getUserBets((user && (user.id || user.email)) || '');
+    var scorers = DB.get('exact_scorers', {}); // { gameId: [{name,company,initials}] } — só quem cravou (vem do RPC)
 
     var h = '';
     // Hero
@@ -5327,6 +5417,31 @@ SPA.pages["resultados"]={style:``,script:function(){
         h += '<span style="color:#9CA3BF;">Você não palpitou neste jogo</span>';
       }
       h += '</div>';
+
+      // cravadores: só quem acertou o placar exato deste jogo (destaque + parabéns)
+      var cravadores = scorers[g.id] || [];
+      if (cravadores.length) {
+        h += '<div style="border-top:1px dashed #E5C100;background:linear-gradient(135deg,rgba(245,197,24,.14),rgba(34,197,94,.08));">';
+        // header fixo
+        h += '<div style="display:flex;align-items:center;gap:6px;padding:10px 14px 8px;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:#B8860B;">🎯 Cravaram o placar <span style="background:#F5C518;color:#1B2B6B;border-radius:99px;padding:1px 8px;font-size:.7rem;line-height:1.5;">'+cravadores.length+'</span></div>';
+        // lista: 1 por linha, altura p/ ~10 usuários, scroll interno se passar
+        h += '<div style="display:flex;flex-direction:column;gap:5px;max-height:330px;overflow-y:auto;padding:0 14px;">';
+        cravadores.forEach(function(c){
+          var ini = esc(c.initials || (c.name ? c.name.split(' ').slice(0,2).map(function(n){return n[0];}).join('').toUpperCase() : '?'));
+          h += '<div style="display:flex;align-items:center;gap:8px;background:white;border:1.5px solid #F5C518;border-radius:99px;padding:3px 12px 3px 3px;box-shadow:0 1px 3px rgba(0,0,0,.06);">';
+          h += '<span style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#1B2B6B,#3D5AC8);color:white;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;flex-shrink:0;">'+ini+'</span>';
+          h += '<span style="font-size:.8rem;font-weight:700;color:#2D3557;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(c.name||'')+'</span>';
+          if (c.company) h += '<span style="font-size:.62rem;color:#9CA3BF;flex-shrink:0;">'+esc(c.company)+'</span>';
+          h += '</div>';
+        });
+        h += '</div>';
+        // footer fixo
+        h += '<div style="font-size:.68rem;color:#16A34A;font-weight:700;padding:8px 14px 12px;">🎉 Parabéns! +15 pts de placar exato.</div>';
+        h += '</div>';
+      } else {
+        h += '<div style="padding:9px 14px;border-top:1px solid #EEF0F6;background:#FAFBFD;display:flex;align-items:center;gap:6px;font-size:.72rem;color:#9CA3BF;font-weight:600;">😬 Ninguém cravou este placar.</div>';
+      }
+
       h += '</div>';
     });
     h += '</div>';
@@ -5335,6 +5450,8 @@ SPA.pages["resultados"]={style:``,script:function(){
   }
 
   render();
+  // busca quem cravou (RPC server-side; nunca expõe palpite alheio que não cravou) e re-renderiza
+  if (window.syncExactScorersFromSupabase) window.syncExactScorersFromSupabase().then(function(ok){ if (ok) render(); });
 })();
 }};
 SPA.pages["perfil"]={style:`.profile-header {
@@ -6538,6 +6655,23 @@ window.syncBestGameFromSupabase = async function() {
     if (!r.ok) return false;
     var rows = await r.json();
     DB.set('best_game', (rows && rows[0]) || null);
+    return true;
+  } catch(e) { return false; }
+};
+
+// Quem cravou o placar exato, por jogo (global). Vem do RPC exact_scorers (SECURITY DEFINER):
+// só retorna palpites que BATERAM com o resultado de jogos já encerrados — nunca palpite cru de quem errou.
+window.syncExactScorersFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/exact_scorers', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    var byGame = {};
+    (rows || []).forEach(function(x){
+      if (!byGame[x.game_id]) byGame[x.game_id] = [];
+      byGame[x.game_id].push({ name: x.name, company: x.company, initials: x.initials });
+    });
+    DB.set('exact_scorers', byGame);
     return true;
   } catch(e) { return false; }
 };
