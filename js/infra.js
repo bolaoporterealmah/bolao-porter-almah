@@ -522,6 +522,26 @@ DB.saveGames = async function(games) {
   } catch(e) { console.warn('[Supabase] saveGames failed:', e.message); }
 };
 
+// Salva/limpa o resultado de UM jogo só (PATCH numa linha) → dispara 1 rebuild da trigger.
+// Passe (gid, null, null) para REMOVER o resultado (corrige typo). Antes o save mandava
+// upsert de TODOS os jogos com resultado, e o clear nunca chegava no servidor.
+window.upsertGameResult = async function(gameId, homeScore, awayScore) {
+  await Sess.ensure();
+  var body = {
+    result_home: (homeScore === null || homeScore === undefined) ? null : homeScore,
+    result_away: (awayScore === null || awayScore === undefined) ? null : awayScore
+  };
+  var r = await fetch(SUPABASE_URL + '/rest/v1/games?id=eq.' + encodeURIComponent(gameId), {
+    method: 'PATCH',
+    headers: Object.assign({}, Sess.headers(), {'Prefer': 'return=minimal'}),
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) { var t = await r.text(); throw new Error(r.status + ' ' + t.slice(0,140)); }
+  if (window.syncRankingFromSupabase) await syncRankingFromSupabase();
+  if (window.syncRankingMovementFromSupabase) await syncRankingMovementFromSupabase();
+  return true;
+};
+
 // Override saveUsers
 var _origSaveUsers = DB.saveUsers.bind(DB);
 DB.saveUsers = async function(users) {

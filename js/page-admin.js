@@ -253,7 +253,15 @@ function bindEvents(pc) {
       if (hEl.value===''||aEl.value==='') { Utils.toast('Preencha o placar dos dois times','error'); return; }
       var games = DB.getGames();
       var g = games.find(function(x){return x.id===gid;});
-      if (g) { g.result={home_score:parseInt(hEl.value),away_score:parseInt(aEl.value)}; DB.saveGames(games); Utils.toast('Resultado salvo! ✓','success'); render(); }
+      if (g) {
+        var hs=parseInt(hEl.value), as=parseInt(aEl.value);
+        g.result={home_score:hs,away_score:as};
+        DB.set('games', games);                 // cache local (sem upsert em massa)
+        Utils.toast('Resultado salvo! ✓','success'); render();
+        if (window.upsertGameResult) window.upsertGameResult(gid, hs, as)
+          .then(function(){ render(); })
+          .catch(function(e){ Utils.toast('Falha ao salvar no servidor: '+e.message,'error'); });
+      }
       return;
     }
 
@@ -264,7 +272,14 @@ function bindEvents(pc) {
       var gid = clearRes.getAttribute('data-clearresult');
       var games = DB.getGames();
       var g = games.find(function(x){return x.id===gid;});
-      if (g) { g.result=null; DB.saveGames(games); Utils.toast('Resultado removido','info'); render(); }
+      if (g) {
+        g.result=null;
+        DB.set('games', games);                 // cache local
+        Utils.toast('Resultado removido','info'); render();
+        if (window.upsertGameResult) window.upsertGameResult(gid, null, null)   // limpa no servidor + recalcula
+          .then(function(){ render(); })
+          .catch(function(e){ Utils.toast('Falha ao remover no servidor: '+e.message,'error'); });
+      }
       return;
     }
 
