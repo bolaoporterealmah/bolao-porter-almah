@@ -338,6 +338,8 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
 
     h += '</div>'; // teams row
 
+    if (!isFinished && typeof Odds !== 'undefined') h += Odds.barHtml(game);
+
     // Footer
     h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
     if (hasBet && !isFinished && !canBet) {
@@ -359,6 +361,7 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
 
   render();
   if (window.syncBetsFromSupabase) window.syncBetsFromSupabase().then(function(){ if(SPA.current==='apostas') render(); });
+  if (typeof Odds !== 'undefined') Odds.load().then(function(){ if(SPA.current==='apostas') render(); });
 })();
 
 

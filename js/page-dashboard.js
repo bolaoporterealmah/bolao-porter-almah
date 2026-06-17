@@ -88,7 +88,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
         var bet=userBets[g.id], canBet=Utils.canBet(g);
         h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #EEF0F6;">';
         h += '<div style="flex:1;min-width:0;"><div style="font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(flag(g.home))+' '+g.home+' × '+g.away+' '+(flag(g.away))+'</div>';
-        h += '<div style="font-size:.65rem;color:#9CA3BF;">'+Utils.formatDateTime(g.date)+'</div></div>';
+        h += '<div style="font-size:.65rem;color:#9CA3BF;">'+Utils.formatDateTime(g.date)+'</div>'+(typeof Odds!=='undefined'?Odds.miniHtml(g):'')+'</div>';
         if(bet) h+='<span style="font-size:.7rem;font-weight:700;color:#16A34A;">✓ '+bet.home_score+'×'+bet.away_score+'</span>';
         else if(canBet) h+='<button data-nav="palpites" style="padding:4px 9px;background:#F5C518;color:#1B2B6B;border:none;border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">Palpitar</button>';
         else h+='<span style="font-size:.68rem;color:#9CA3BF;">🔒</span>';
@@ -139,6 +139,7 @@ SPA.pages["dashboard"]={style:``,script:function(){
   render();
   // Store interval ID and guard with SPA.current check inside render()
   intervalId = setInterval(render, 30000);
+  if (typeof Odds !== 'undefined') Odds.load().then(function(){ if(SPA.current==='dashboard') render(); });
 })();
 
 }};

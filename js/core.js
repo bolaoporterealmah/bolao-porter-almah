@@ -174,6 +174,146 @@ const Scoring = {
   }
 };
 
+// ─── ODDS (Polymarket) ───────────────────────────────────────────────────────
+// Probabilidade de mercado por jogo. Série soccer-fifwc (id 11433), markets
+// moneyline 3-way (Time1 win / Draw / Time2 win). Público, sem auth, CORS ok.
+const Odds = {
+  SERIES_ID: 11433,
+  CACHE_KEY: 'bolao_odds_cache',
+  TTL: 10 * 60 * 1000,
+  _index: null,
+  _loading: null,
+
+  _nameIso: {
+    ghana:'GH', panama:'PA', uzbekistan:'UZ', colombia:'CO',
+    czechia:'CZ', czechrepublic:'CZ', southafrica:'ZA', switzerland:'CH',
+    bosniaherzegovina:'BA', bosniaandherzegovina:'BA', canada:'CA', qatar:'QA',
+    mexico:'MX', korearepublic:'KR', southkorea:'KR', republicofkorea:'KR',
+    unitedstates:'US', usa:'US', unitedstatesofamerica:'US', australia:'AU',
+    scotland:'GB', morocco:'MA', brazil:'BR', haiti:'HT',
+    turkiye:'TR', turkey:'TR', paraguay:'PY', netherlands:'NL', sweden:'SE',
+    germany:'DE', cotedivoire:'CI', ivorycoast:'CI', ecuador:'EC', curacao:'CW',
+    tunisia:'TN', japan:'JP', spain:'ES', saudiarabia:'SA', england:'GB',
+    croatia:'HR', argentina:'AR', france:'FR', portugal:'PT', italy:'IT',
+    belgium:'BE', uruguay:'UY', senegal:'SN', poland:'PL', peru:'PE', chile:'CL',
+    serbia:'RS', norway:'NO', iran:'IR', iranislamicrepublic:'IR', egypt:'EG',
+    newzealand:'NZ', austria:'AT', algeria:'DZ', iraq:'IQ',
+    drcongo:'CD', democraticrepublicofthecongo:'CD', congodr:'CD',
+    capeverde:'CV', caboverde:'CV', costarica:'CR', jamaica:'JM', honduras:'HN',
+    venezuela:'VE', cameroon:'CM', jordan:'JO'
+  },
+
+  iso(name) {
+    if (!name) return '';
+    var n = String(name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+    return this._nameIso[n] || '';
+  },
+
+  pairKey(a, b) { return [a, b].sort().join('|'); },
+
+  // {home,draw,away} em % inteiros (orientado ao game), ou null se sem dado.
+  get(game) {
+    if (!this._index || !game || game.tbd) return null;
+    var ha = teamCode(game.home), aa = teamCode(game.away);
+    if (!/^[A-Z]{2}$/.test(ha) || !/^[A-Z]{2}$/.test(aa)) return null;
+    var e = this._index[this.pairKey(ha, aa)];
+    if (!e) return null;
+    var homeP = (e.isoHome === ha) ? e.pHome : e.pAway;
+    var awayP = (e.isoHome === ha) ? e.pAway : e.pHome;
+    var sum = homeP + e.pDraw + awayP;
+    if (!(sum > 0)) return null;
+    return {
+      home: Math.round(homeP / sum * 100),
+      draw: Math.round(e.pDraw / sum * 100),
+      away: Math.round(awayP / sum * 100)
+    };
+  },
+
+  load(force) {
+    var self = this;
+    if (this._loading) return this._loading;
+    if (!force) {
+      try {
+        var raw = localStorage.getItem(this.CACHE_KEY);
+        if (raw) {
+          var c = JSON.parse(raw);
+          if (c && c.index && (Date.now() - c.t) < this.TTL) { this._index = c.index; return Promise.resolve(this._index); }
+        }
+      } catch (e) {}
+    }
+    this._loading = this._fetch().then(function(idx) { self._index = idx; self._loading = null; return idx; })
+      .catch(function() { self._loading = null; return self._index; });
+    return this._loading;
+  },
+
+  _fetch() {
+    var self = this;
+    var url = 'https://gamma-api.polymarket.com/events?series_id=' + this.SERIES_ID + '&closed=false&limit=200';
+    return fetch(url).then(function(res) {
+      if (!res.ok) throw new Error('odds http ' + res.status);
+      return res.json();
+    }).then(function(events) {
+      var index = {};
+      (events || []).forEach(function(ev) {
+        // Pula mercados derivados (Halftime Result, etc.) — só o confronto "X vs. Y".
+        if (String(ev.title || '').indexOf(' - ') >= 0) return;
+        var teams = [], drawP = null;
+        (ev.markets || []).forEach(function(m) {
+          var prices = m.outcomePrices;
+          if (typeof prices === 'string') { try { prices = JSON.parse(prices); } catch (e) { prices = null; } }
+          if (!prices || !prices.length) return;
+          var pYes = parseFloat(prices[0]);
+          if (!(pYes >= 0)) return;
+          var label = ((m.groupItemTitle || '') + ' ' + (m.question || '')).toLowerCase();
+          if (label.indexOf('draw') >= 0) drawP = pYes;
+          else teams.push({ name: m.groupItemTitle || '', p: pYes });
+        });
+        if (teams.length !== 2 || drawP == null) return;
+        var iso0 = self.iso(teams[0].name), iso1 = self.iso(teams[1].name);
+        if (!iso0 || !iso1 || iso0 === iso1) return;
+        index[self.pairKey(iso0, iso1)] = { isoHome: iso0, pHome: teams[0].p, pAway: teams[1].p, pDraw: drawP };
+      });
+      try { localStorage.setItem(self.CACHE_KEY, JSON.stringify({ t: Date.now(), index: index })); } catch (e) {}
+      return index;
+    });
+  },
+
+  // Barra completa para cards de palpite. '' se tbd.
+  barHtml(game) {
+    if (!game || game.tbd) return '';
+    var o = this.get(game);
+    if (!o) {
+      return '<div style="font-size:.6rem;color:#C2C7D6;text-align:center;font-weight:600;margin:0 0 10px;">Chances de mercado: —</div>';
+    }
+    var h = '<div title="Probabilidade implícita do mercado (Polymarket)" style="margin:0 0 12px;">';
+    h += '<div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#EEF0F6;">';
+    h += '<div style="width:' + o.home + '%;background:#1B2B6B;"></div>';
+    h += '<div style="width:' + o.draw + '%;background:#9CA3BF;"></div>';
+    h += '<div style="width:' + o.away + '%;background:#C0392B;"></div>';
+    h += '</div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:.6rem;font-weight:700;color:#5A6385;margin-top:3px;">';
+    h += '<span style="color:#1B2B6B;">' + o.home + '%</span>';
+    h += '<span>Empate ' + o.draw + '%</span>';
+    h += '<span style="color:#C0392B;">' + o.away + '%</span>';
+    h += '</div></div>';
+    return h;
+  },
+
+  // Mini barra para listas densas (dashboard). '' se sem dado.
+  miniHtml(game) {
+    var o = this.get(game);
+    if (!o) return '';
+    var h = '<div title="Chances de mercado (Polymarket): ' + o.home + '% / empate ' + o.draw + '% / ' + o.away + '%" ';
+    h += 'style="display:flex;height:4px;border-radius:3px;overflow:hidden;background:#EEF0F6;margin-top:4px;max-width:180px;">';
+    h += '<div style="width:' + o.home + '%;background:#1B2B6B;"></div>';
+    h += '<div style="width:' + o.draw + '%;background:#9CA3BF;"></div>';
+    h += '<div style="width:' + o.away + '%;background:#C0392B;"></div>';
+    h += '</div>';
+    return h;
+  }
+};
+if (typeof window !== 'undefined') window.Odds = Odds;
+
 // ─── LOCAL STORAGE DB ────────────────────────────────────────────────────────
 const DB = {
   key: (k) => `bolao_${k}`,
