@@ -174,14 +174,22 @@ function render() {
     h += '</div>';
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;">';
     users.forEach(function(u, idx){
-      h += '<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;'+(idx<users.length-1?'border-bottom:1px solid #EEF0F6;':'')+'">';
+      var inactive = (u.active===false);
+      h += '<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;'+(idx<users.length-1?'border-bottom:1px solid #EEF0F6;':'')+(inactive?'opacity:.55;':'')+'">';
       h += '<div style="width:38px;height:38px;border-radius:50%;background:#3D5AC8;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:.85rem;flex-shrink:0;">'+u.initials+'</div>';
-      h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;">'+esc(u.name)+'</div>';
+      h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;">'+esc(u.name)+(inactive?' <span style="font-size:.6rem;color:#DC2626;font-weight:800;">DESATIVADO</span>':'')+'</div>';
       h += '<div style="font-size:.72rem;color:#9CA3BF;">'+esc(u.email)+'</div></div>';
       h += '<span style="background:'+(u.company==='Porter'?'rgba(27,43,107,.1)':'rgba(245,197,24,.2)')+';color:'+(u.company==='Porter'?'#1B2B6B':'#92400E')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+esc(u.company)+'</span>';
       h += '<span style="background:'+(u.role==='admin'?'rgba(239,68,68,.1)':'rgba(34,197,94,.1)')+';color:'+(u.role==='admin'?'#DC2626':'#16A34A')+';padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:700;">'+u.role+'</span>';
       h += '<button data-userbets="'+esc(u.email)+'" style="padding:5px 10px;background:rgba(27,43,107,.06);border:1px solid rgba(27,43,107,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#1B2B6B;font-weight:700;">📝 Palpites</button>';
-      h += '<button data-deleteuser="'+u.id+'" style="padding:5px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#DC2626;">🗑️</button>';
+      // Admins não têm toggle (evita auto-trancar acesso). Participantes: desativar/reativar.
+      if (u.role==='admin') {
+        h += '<span style="width:96px;text-align:center;font-size:.66rem;color:#C0C5D6;">—</span>';
+      } else if (inactive) {
+        h += '<button data-toggleactive="'+esc(u.email)+'" data-active="0" style="padding:5px 10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:7px;font-size:.72rem;cursor:pointer;color:#16A34A;font-weight:700;">✅ Reativar</button>';
+      } else {
+        h += '<button data-toggleactive="'+esc(u.email)+'" data-active="1" style="padding:5px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:7px;font-size:.72rem;cursor:pointer;color:#DC2626;font-weight:700;">🚫 Desativar</button>';
+      }
       h += '</div>';
     });
     h += '</div>';
@@ -306,11 +314,23 @@ function bindEvents(pc) {
     var userBets = e.target.closest('[data-userbets]');
     if (userBets) { openUserBetsModal(userBets.getAttribute('data-userbets')); return; }
 
-    var delUser = e.target.closest('[data-deleteuser]');
-    if (delUser) {
-      if (!confirm('Remover participante?')) return;
-      DB.saveUsers(DB.getUsers().filter(function(u){return u.id!==delUser.getAttribute('data-deleteuser');}));
-      Utils.toast('Participante removido','info'); render(); return;
+    var tgl = e.target.closest('[data-toggleactive]');
+    if (tgl) {
+      var em = tgl.getAttribute('data-toggleactive');
+      var toActive = tgl.getAttribute('data-active')==='0'; // está inativo → vai ativar
+      var msg = toActive
+        ? 'Reativar este participante? Ele volta ao ranking e pode logar de novo.'
+        : 'Desativar este participante? Ele sai do ranking, as posições recalculam e o login fica bloqueado. Os palpites são preservados.';
+      if (!confirm(msg)) return;
+      tgl.disabled = true; var _orig = tgl.textContent; tgl.textContent = '...';
+      window.setUserActive(em, toActive).then(function(){
+        Utils.toast(toActive?'Participante reativado ✓':'Participante desativado ✓', toActive?'success':'info');
+        render();
+      }).catch(function(err){
+        tgl.disabled = false; tgl.textContent = _orig;
+        Utils.toast('Falha: '+err.message,'error');
+      });
+      return;
     }
 
     // Actions

@@ -46,7 +46,10 @@ async function sbLogin(email,password){
   var r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':SUPABASE_ANON,'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password})});
   var d=await r.json(); if(!r.ok) throw new Error(d.error_description||d.msg||'E-mail ou senha incorretos.');
   Sess.set({access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at,user:d.user});
-  var u=await loadProfile(); await initSupabase();
+  var u=await loadProfile();
+  // Conta desativada pelo admin → não entra (RLS também barra gravações).
+  if(u && u.active===false){ Sess.clear(); Auth.user=null; throw new Error('Conta desativada. Fale com o administrador do bolão.'); }
+  await initSupabase();
   if(window.reconcileLocalBets) await reconcileLocalBets();
   return u;
 }
@@ -64,6 +67,29 @@ async function sbCreateUser(email,password,meta){
 async function syncProfilesFromSupabase(){
   try{ var r=await fetch(SUPABASE_URL+'/rest/v1/profiles?select=*',{headers:Sess.headers(false)}); if(!r.ok)return false; var rows=await r.json(); if(rows&&rows.length){ DB.set('users', rows); } return true; }catch(e){return false;}
 }
+
+// Ativa/desativa um participante (admin). Inativo some do ranking (a RPC filtra
+// `active` → posições recalculam sozinhas) e é bloqueado no login + RLS.
+// Após o PATCH, re-sincroniza perfis e ranking p/ refletir a reclassificação.
+window.setUserActive = async function(email, active){
+  await Sess.ensure();
+  var r = await fetch(SUPABASE_URL+'/rest/v1/profiles?email=eq.'+encodeURIComponent(email), {
+    method:'PATCH',
+    headers: Object.assign({}, Sess.headers(), {'Prefer':'return=minimal'}),
+    body: JSON.stringify({active: !!active})
+  });
+  if(!r.ok){ var t=await r.text(); throw new Error(r.status+' '+t.slice(0,140)); }
+  // Snapshots do movement (▲▼) só são reconstruídos pela trigger ao mudar
+  // resultado de jogo. Desativar/reativar não dispara isso → reconstrói aqui,
+  // senão quem estava abaixo do inativo apareceria com ▲ falso até o próximo placar.
+  try {
+    await fetch(SUPABASE_URL+'/rest/v1/rpc/rebuild_ranking_snapshots', {method:'POST', headers:Sess.headers(), body:'{}'});
+  } catch(e) { /* movement se auto-corrige no próximo resultado */ }
+  if(window.syncProfilesFromSupabase) await syncProfilesFromSupabase();
+  if(window.syncRankingFromSupabase) await syncRankingFromSupabase();
+  if(window.syncRankingMovementFromSupabase) await syncRankingMovementFromSupabase();
+  return true;
+};
 
 var SB = {
   _cache: {},
@@ -629,6 +655,14 @@ document.addEventListener('click', function _apostasGlobalHandler(e) {
   if (Sess.get()) {
     await Sess.ensure();
     try { Auth.user = JSON.parse(localStorage.getItem('bolao_user')||'null'); } catch(e){}
+    // Conta desativada durante a sessão (JWT ainda válido) → desloga.
+    try {
+      var _uid = Auth.user && Auth.user.id;
+      if (_uid) {
+        var _pr = await fetch(SUPABASE_URL+'/rest/v1/profiles?id=eq.'+encodeURIComponent(_uid)+'&select=active&limit=1',{headers:Sess.headers(false)});
+        if (_pr.ok) { var _prows = await _pr.json(); if (_prows && _prows[0] && _prows[0].active===false) { Sess.clear(); SPA.navigate('login'); return; } }
+      }
+    } catch(e){}
     await initSupabase();
     if (window.syncBetsFromSupabase) await syncBetsFromSupabase();
     if (window.reconcileLocalBets) await reconcileLocalBets();
