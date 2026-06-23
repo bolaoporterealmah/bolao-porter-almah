@@ -405,6 +405,47 @@ window.syncBestGameFromSupabase = async function() {
   } catch(e) { return false; }
 };
 
+// Hall: jogo que mais gente cravou (placar exato). RPC most_exact_game (agregado).
+window.syncMostExactGameFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/most_exact_game', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    DB.set('most_exact_game', (rows && rows[0]) || null);
+    return true;
+  } catch(e) { return false; }
+};
+
+// Hall: jogo que mais distribuiu pontos (soma de todos os ativos). RPC top_distributing_game.
+window.syncTopDistributingGameFromSupabase = async function() {
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/top_distributing_game', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    DB.set('top_distributing_game', (rows && rows[0]) || null);
+    return true;
+  } catch(e) { return false; }
+};
+
+// Hall: prêmios extras. Cada RPC devolve 1 (ou poucas) linha(s) agregada(s).
+// Helper genérico p/ RPC sem parâmetros → guarda no cache local sob `key`.
+async function _rpcCacheOne(rpc, key, firstOnly){
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) return false;
+    var rows = await r.json();
+    DB.set(key, firstOnly ? ((rows && rows[0]) || null) : (rows || []));
+    return true;
+  } catch(e) { return false; }
+}
+window.syncBottomDistributingGameFromSupabase = function(){ return _rpcCacheOne('bottom_distributing_game', 'bottom_distributing_game', true); };
+window.syncBiggestClimbFromSupabase     = function(){ return _rpcCacheOne('biggest_climb', 'biggest_climb', true); };
+window.syncHottestStreakFromSupabase    = function(){ return _rpcCacheOne('hottest_streak', 'hottest_streak', true); };
+window.syncRarestExactFromSupabase      = function(){ return _rpcCacheOne('rarest_exact', 'rarest_exact', true); };
+window.syncKnockoutProphetFromSupabase  = function(){ return _rpcCacheOne('knockout_prophet', 'knockout_prophet', true); };
+window.syncPerfectPredictorsFromSupabase= function(){ return _rpcCacheOne('perfect_predictors', 'perfect_predictors', false); };
+window.syncCompanyDuelFromSupabase      = function(){ return _rpcCacheOne('company_duel', 'company_duel', false); };
+
 // Movimento do ranking (▲▼). RPC ranking_movement devolve a posição ANTERIOR de cada
 // participante (snapshot tirado antes do último placar). delta = prev - atual no client.
 window.syncRankingMovementFromSupabase = async function() {
