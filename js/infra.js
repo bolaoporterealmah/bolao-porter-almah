@@ -609,6 +609,30 @@ window.upsertGameResult = async function(gameId, homeScore, awayScore) {
   return true;
 };
 
+// Persiste UM jogo inteiro (cadastro/edição de metadados: times, data, fase, etc.).
+// O override de DB.saveGames só sobe jogos COM resultado, então editar um jogo
+// "a definir" (sem placar) nunca chegava no servidor — recarregava como tbd/não
+// configurado. Aqui fazemos o upsert da linha completa.
+window.upsertGame = async function(game) {
+  await Sess.ensure();
+  await SB.upsert('games', {
+    id: game.id, phase: game.phase, group: game.group || null,
+    home: game.home || null, away: game.away || null,
+    date: game.date, city: game.city || null, stadium: game.stadium || null,
+    result_home: game.result ? game.result.home_score : null,
+    result_away: game.result ? game.result.away_score : null,
+    tbd: game.tbd || false, description: game.desc || null
+  });
+  return true;
+};
+
+// Remove UM jogo do servidor (o filter local nunca apagava a linha no Supabase).
+window.deleteGame = async function(gameId) {
+  await Sess.ensure();
+  await SB.delete('games', 'id=eq.' + encodeURIComponent(gameId));
+  return true;
+};
+
 // Override saveUsers
 var _origSaveUsers = DB.saveUsers.bind(DB);
 DB.saveUsers = async function(users) {
