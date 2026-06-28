@@ -3,12 +3,36 @@ SPA.pages["chaveamento"]={style:`.bracket-container {
   padding: 20px 0;
 }
 .bracket-row {
-  display: flex; align-items: flex-start; gap: 24px;
+  --gap: 28px;
+  --bline: #C7CCDD;
+  display: flex; align-items: stretch; gap: var(--gap);
   min-width: max-content;
   padding: 0 4px;
 }
 .bracket-col { display:flex; flex-direction:column; gap:0; }
-.bracket-stage { min-width: 170px; }
+.bracket-stage { min-width: 180px; display:flex; flex-direction:column; }
+.round-body { flex:1; display:flex; flex-direction:column; }
+.cell {
+  flex:1 0 auto; min-height:62px;
+  display:flex; align-items:center; position:relative;
+  padding:11px 0;
+}
+.cell > .b-match { width:100%; margin-bottom:0; }
+
+/* outgoing connectors: L-shaped borders join each pair of source matches
+   into the centered target match of the next round */
+.bracket-stage:not(:last-child) .cell:nth-child(odd)::after {
+  content:''; position:absolute; left:100%; top:50%;
+  width:var(--gap); height:50%;
+  border-right:2px solid var(--bline);
+  border-top:2px solid var(--bline);
+}
+.bracket-stage:not(:last-child) .cell:nth-child(even)::after {
+  content:''; position:absolute; left:100%; bottom:50%;
+  width:var(--gap); height:50%;
+  border-right:2px solid var(--bline);
+  border-bottom:2px solid var(--bline);
+}
 .bstage-title {
   font-family:var(--font-display); font-size:0.7rem; font-weight:800;
   text-transform:uppercase; letter-spacing:1px; color:var(--porter-gray-400);
@@ -42,6 +66,10 @@ SPA.pages["chaveamento"]={style:`.bracket-container {
 .b-team.winner .b-sub { color:var(--porter-blue); opacity:0.7; }
 
 .b-connector { display:flex; align-items:center; }
+.third-place {
+  margin-top:24px; max-width:200px; min-width:180px;
+  border-top:1px dashed var(--porter-gray-200); padding-top:16px;
+}
 
 .groups-grid {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px;
@@ -101,17 +129,16 @@ function computeStandings(letter, teams) {
 function render() {
   const games = DB.getGames();
 
-  // Bracket games (ordenados por data — alinha com o vínculo das fases)
-  const byDate = arr => arr.sort((a,b) => new Date(a.date) - new Date(b.date));
-  const r32 = byDate(games.filter(g => g.phase === 'round_of_32'));
-  const r16 = byDate(games.filter(g => g.phase === 'round_of_16'));
-  const qf = byDate(games.filter(g => g.phase === 'quarterfinals'));
-  const sf = byDate(games.filter(g => g.phase === 'semifinals'));
-  const tp = games.filter(g => g.phase === 'third_place');
+  // Ordem do chaveamento derivada da ÁRVORE (tokens W##/L## em desc),
+  // não da data — assim cada par de cards alimenta o card certo da fase seguinte.
+  const order = bracketOrder(games);
+  const byDate = arr => arr.slice().sort((a,b) => new Date(a.date) - new Date(b.date));
+  const r32 = order.round_of_32   || [];
+  const r16 = order.round_of_16   || [];
+  const qf  = order.quarterfinals || [];
+  const sf  = order.semifinals    || [];
   const fin = games.filter(g => g.phase === 'final');
-
-  // Vínculo do mata-mata (preenche descs faltantes das quartas em diante)
-  _links = bracketLinks();
+  const tp  = games.filter(g => g.phase === 'third_place');
 
   // Após 28/06 o mata-mata vira a aba inicial
   const knockoutFirst = new Date() >= new Date('2026-06-28T00:00:00');
@@ -182,66 +209,106 @@ function render() {
         <!-- 16-avos -->
         <div class="bracket-stage">
           <div class="bstage-title">🎲 16-avos de Final</div>
-          ${r32.length > 0 ? r32.map(g => renderBracketMatch(g)).join('') :
-          Array.from({length:16}).map(() => renderTbdMatch()).join('')}
+          <div class="round-body">
+            ${r32.length > 0 ? r32.map(g => cell(renderBracketMatch(g))).join('') :
+            Array.from({length:16}).map(() => cell(renderTbdMatch())).join('')}
+          </div>
         </div>
 
         <!-- Oitavas -->
         <div class="bracket-stage">
           <div class="bstage-title">⚡ Oitavas de Final</div>
-          ${r16.length > 0 ? r16.map(g => renderBracketMatch(g)).join('') :
-          Array.from({length:8}).map(() => renderTbdMatch('Vencedor 16-avos')).join('')}
+          <div class="round-body">
+            ${r16.length > 0 ? r16.map(g => cell(renderBracketMatch(g))).join('') :
+            Array.from({length:8}).map(() => cell(renderTbdMatch('Vencedor 16-avos'))).join('')}
+          </div>
         </div>
 
         <!-- Quartas -->
         <div class="bracket-stage">
           <div class="bstage-title">🔥 Quartas de Final</div>
-          ${qf.length > 0 ? qf.map(g => renderBracketMatch(g)).join('') :
-          Array.from({length:4}).map(() => renderTbdMatch('Vencedor oitavas')).join('')}
+          <div class="round-body">
+            ${qf.length > 0 ? qf.map(g => cell(renderBracketMatch(g))).join('') :
+            Array.from({length:4}).map(() => cell(renderTbdMatch('Vencedor oitavas'))).join('')}
+          </div>
         </div>
 
         <!-- Semi -->
         <div class="bracket-stage">
           <div class="bstage-title">⚡ Semifinais</div>
-          ${sf.length > 0 ? sf.map(g => renderBracketMatch(g)).join('') :
-          Array.from({length:2}).map(() => renderTbdMatch('Vencedor quartas')).join('')}
-        </div>
-
-        <!-- 3º + Final -->
-        <div style="display:flex;flex-direction:column;gap:16px;">
-          <div class="bracket-stage">
-            <div class="bstage-title">🥉 3º Lugar</div>
-            ${tp.length > 0 ? tp.map(g => renderBracketMatch(g)).join('') : renderTbdMatch('Perdedores semi')}
-          </div>
-          <div class="bracket-stage">
-            <div class="bstage-title">🏆 Final</div>
-            ${fin.length > 0 ? fin.map(g => renderBracketMatch(g)).join('') : renderTbdMatch('Vencedores semi')}
+          <div class="round-body">
+            ${sf.length > 0 ? sf.map(g => cell(renderBracketMatch(g))).join('') :
+            Array.from({length:2}).map(() => cell(renderTbdMatch('Vencedor quartas'))).join('')}
           </div>
         </div>
 
+        <!-- Final -->
+        <div class="bracket-stage">
+          <div class="bstage-title">🏆 Final</div>
+          <div class="round-body">
+            ${fin.length > 0 ? fin.map(g => cell(renderBracketMatch(g))).join('') : cell(renderTbdMatch('Vencedores semi'))}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 3º Lugar (disputa à parte) -->
+      <div class="third-place">
+        <div class="bstage-title">🥉 Disputa de 3º Lugar</div>
+        ${tp.length > 0 ? tp.map(g => renderBracketMatch(g)).join('') : renderTbdMatch('Perdedores semi')}
       </div>
     </div>
   </div>
   `;
 }
 
-// Vínculo dos jogos: descs faltantes (quartas+) derivadas do round anterior por ordem de data
 var _links = {};
-function bracketLinks() {
-  const games = DB.getGames();
-  const byDate = arr => arr.slice().sort((a,b) => new Date(a.date) - new Date(b.date));
-  const num = id => id.replace(/^j/,'');
-  const r16 = byDate(games.filter(g => g.phase === 'round_of_16'));
-  const qf  = byDate(games.filter(g => g.phase === 'quarterfinals'));
-  const sf  = byDate(games.filter(g => g.phase === 'semifinals'));
-  const tp  = byDate(games.filter(g => g.phase === 'third_place'));
-  const fin = byDate(games.filter(g => g.phase === 'final'));
-  const links = {};
-  qf.forEach((g,i) => { if (!g.desc && r16[i*2] && r16[i*2+1]) links[g.id] = 'W'+num(r16[i*2].id)+' x W'+num(r16[i*2+1].id); });
-  sf.forEach((g,i) => { if (!g.desc && qf[i*2]  && qf[i*2+1])  links[g.id] = 'W'+num(qf[i*2].id)+' x W'+num(qf[i*2+1].id); });
-  if (fin[0] && !fin[0].desc && sf[0] && sf[1]) links[fin[0].id] = 'W'+num(sf[0].id)+' x W'+num(sf[1].id);
-  if (tp[0]  && !tp[0].desc  && sf[0] && sf[1]) links[tp[0].id]  = 'L'+num(sf[0].id)+' x L'+num(sf[1].id);
-  return links;
+
+// Árvore FIXA do mata-mata (jogos 97+ → seus dois alimentadores). A base live
+// (Supabase) traz desc=null das quartas em diante, então usamos este mapa como
+// fallback. Os pares de R16 (89-96) vêm dos próprios descs "W## x W##".
+// Obs: numerações divergentes (ex.: 89↔90) são irmãos no mesmo par — confronto idêntico.
+var KO_CHILDREN = {
+  97:[89,90], 98:[93,94], 99:[91,92], 100:[95,96],
+  101:[97,98], 102:[99,100],
+  103:[101,102], 104:[101,102]
+};
+
+// Ordem top→bottom de cada fase, derivada da árvore do mata-mata.
+// DFS a partir da final seguindo os alimentadores: a ordem de visita dos jogos
+// de uma fase é exatamente a ordem vertical do chaveamento, garantindo que pares
+// adjacentes de cards alimentem o card certo da fase seguinte.
+function bracketOrder(games) {
+  _links = {};
+  const ko = games.filter(g => g.phase !== 'groups');
+  const byNum = {};
+  ko.forEach(g => { byNum[g.id.replace(/^j/,'')] = g; });
+  const num = g => +g.id.replace(/^j/,'');
+  const childNums = g => {
+    const d = ((g.desc || '').match(/[WL](\d+)/g) || []).map(s => s.slice(1));
+    return d.length ? d : (KO_CHILDREN[num(g)] || []).map(String);
+  };
+  const out = {}, seen = {};
+  (function visit(g){
+    if (!g || seen[g.id]) return;
+    seen[g.id] = 1;
+    (out[g.phase] = out[g.phase] || []).push(g);
+    childNums(g).forEach(n => visit(byNum[n]));
+  })(ko.find(g => g.phase === 'final'));
+  // Preenche descs faltantes (quartas+) para os cards exibirem "Vencedor Jogo NN".
+  Object.keys(KO_CHILDREN).forEach(n => {
+    const g = byNum[n];
+    if (g && !g.desc) {
+      const pre = g.phase === 'third_place' ? 'L' : 'W';
+      const c = KO_CHILDREN[n];
+      _links[g.id] = pre + c[0] + ' x ' + pre + c[1];
+    }
+  });
+  // Fallback final: se a árvore não cobrir alguma fase, ordena por data.
+  ['round_of_32','round_of_16','quarterfinals','semifinals'].forEach(p => {
+    if (!out[p]) out[p] = ko.filter(g => g.phase === p).sort((a,b) => new Date(a.date) - new Date(b.date));
+  });
+  return out;
 }
 
 function groupComplete(letter) {
@@ -318,6 +385,8 @@ function renderBracketMatch(game) {
     teamRow(slotB, scoreB, bWon) +
     '</div>';
 }
+
+function cell(matchHtml) { return '<div class="cell">'+matchHtml+'</div>'; }
 
 function renderTbdMatch(label='A definir') {
   return `

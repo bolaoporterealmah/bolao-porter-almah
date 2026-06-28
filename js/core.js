@@ -1650,7 +1650,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Boston",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W89 x W90"
   },
   {
     "id": "j98",
@@ -1663,7 +1663,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Los Angeles",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W93 x W94"
   },
   {
     "id": "j99",
@@ -1676,7 +1676,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Miami",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W91 x W92"
   },
   {
     "id": "j100",
@@ -1689,7 +1689,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Kansas City",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W95 x W96"
   },
   {
     "id": "j101",
@@ -1702,7 +1702,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Dallas",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W97 x W98"
   },
   {
     "id": "j102",
@@ -1715,7 +1715,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Atlanta",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W99 x W100"
   },
   {
     "id": "j103",
@@ -1728,7 +1728,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Miami",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "L101 x L102"
   },
   {
     "id": "j104",
@@ -1741,7 +1741,7 @@ const DEFAULT_GAMES = [
     "stadium": "Estádio de Nova York/Nova Jersey",
     "result": null,
     "tbd": true,
-    "desc": null
+    "desc": "W101 x W102"
   }
 ];
 
