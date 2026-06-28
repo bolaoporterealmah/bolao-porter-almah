@@ -306,7 +306,14 @@ function bindEvents(pc) {
     var delGame = e.target.closest('[data-deletegame]');
     if (delGame) {
       if (!confirm('Excluir jogo?')) return;
-      DB.saveGames(DB.getGames().filter(function(g){return g.id!==delGame.getAttribute('data-deletegame');}));
+      var delId = delGame.getAttribute('data-deletegame');
+      DB.saveGames(DB.getGames().filter(function(g){return g.id!==delId;}));
+      if (window.deleteGame) {
+        window.deleteGame(delId).catch(function(err){
+          console.warn('[Supabase] deleteGame failed:', err.message);
+          Utils.toast('Removido localmente, mas falhou ao sincronizar com o servidor','error');
+        });
+      }
       Utils.toast('Jogo removido','info'); render(); return;
     }
 
@@ -501,6 +508,13 @@ function openGameModal(id) {
       games.push({id:'g_'+Date.now(),phase:phase,group:group,home:home,away:away,date:date,stadium:stadium,city:city,result:null,tbd:false});
     }
     DB.saveGames(games);
+    var savedGame = games.find(function(x){return x.id===(editingGameId||games[games.length-1].id);});
+    if (window.upsertGame && savedGame) {
+      window.upsertGame(savedGame).catch(function(err){
+        console.warn('[Supabase] upsertGame failed:', err.message);
+        Utils.toast('Salvo localmente, mas falhou ao sincronizar com o servidor','error');
+      });
+    }
     Utils.toast(editingGameId?'Jogo atualizado!':'Jogo cadastrado!','success');
     modal.remove(); render();
   });
