@@ -1938,7 +1938,6 @@ var SPA={
       {id:"resultados",icon:"🏟️",label:"Resultados"},
       {id:"palpites",icon:"🎯",label:"Palpites Especiais"},
       {id:"regras",icon:"📋",label:"Regras & Pontuação"},
-      {id:"chaveamento",icon:"🗂️",label:"Chaveamento"},
       {id:"perfil",icon:"👤",label:"Meu Perfil"},
       {id:"hall",icon:"🌟",label:"Hall da Fama"}
     ];
