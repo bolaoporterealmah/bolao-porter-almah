@@ -55,13 +55,29 @@ function render() {
 
     h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;">';
 
-    var playableGames = games.filter(function(g){ return !g.tbd; });
+    // Pendentes de placar sempre no topo (ordenados por data do jogo), depois os já resolvidos.
+    var playableGames = games.filter(function(g){ return !g.tbd; }).slice().sort(function(a,b){
+      var ap = a.result?1:0, bp = b.result?1:0;
+      if (ap !== bp) return ap - bp;                 // pendentes (0) antes de resolvidos (1)
+      var ta = new Date(a.date).getTime(), tb = new Date(b.date).getTime();
+      if (isNaN(ta)) ta = Infinity;
+      if (isNaN(tb)) tb = Infinity;
+      return ta - tb;                                // dentro de cada grupo, por data asc
+    });
+    var pendingCount = playableGames.filter(function(g){ return !g.result; }).length;
     if (playableGames.length === 0) {
       h += '<div style="padding:40px;text-align:center;color:#9CA3BF;">Nenhum jogo cadastrado ainda.</div>';
     } else {
       playableGames.forEach(function(game, idx) {
+        // Cabeçalho de seção: "Pendentes (N)" no topo; "Já com resultado" na transição.
+        if (idx === 0 && !game.result) {
+          h += '<div style="padding:9px 18px;background:rgba(245,197,24,.1);border-bottom:1px solid #EEF0F6;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;color:#92400E;">⏳ Pendentes de placar · '+pendingCount+'</div>';
+        }
+        if (idx > 0 && !playableGames[idx-1].result && game.result) {
+          h += '<div style="padding:9px 18px;background:#F8F9FC;border-top:1px solid #DDE1EE;border-bottom:1px solid #EEF0F6;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;color:#16A34A;">✅ Já com resultado · '+(playableGames.length-pendingCount)+'</div>';
+        }
         var hasBorder = idx < playableGames.length - 1;
-        h += '<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;'+(hasBorder?'border-bottom:1px solid #EEF0F6;':'')+'">';
+        h += '<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;'+(hasBorder?'border-bottom:1px solid #EEF0F6;':'')+(!game.result?'background:rgba(245,197,24,.03);':'')+'">';
 
         // Match info
         h += '<div style="flex:1;min-width:0;">';
@@ -155,8 +171,24 @@ function render() {
       h += '<th style="padding:10px 14px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9CA3BF;text-align:left;white-space:nowrap;">'+th+'</th>';
     });
     h += '</tr></thead><tbody>';
-    games.forEach(function(g){
-      h += '<tr style="border-bottom:1px solid #EEF0F6;">';
+    // Jogos ainda não definidos (tbd) sempre no topo, por data; depois os definidos, por data.
+    var sortedGames = games.slice().sort(function(a,b){
+      var at = a.tbd?0:1, bt = b.tbd?0:1;
+      if (at !== bt) return at - bt;                 // "a definir" (0) antes dos definidos (1)
+      var ta = new Date(a.date).getTime(), tb = new Date(b.date).getTime();
+      if (isNaN(ta)) ta = Infinity;
+      if (isNaN(tb)) tb = Infinity;
+      return ta - tb;
+    });
+    var tbdCount = games.filter(function(g){ return g.tbd; }).length;
+    sortedGames.forEach(function(g, idx){
+      if (idx === 0 && g.tbd) {
+        h += '<tr><td colspan="6" style="padding:8px 14px;background:rgba(245,197,24,.1);font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;color:#92400E;">⏳ A definir · '+tbdCount+'</td></tr>';
+      }
+      if (idx > 0 && sortedGames[idx-1].tbd && !g.tbd) {
+        h += '<tr><td colspan="6" style="padding:8px 14px;background:#F8F9FC;border-top:1px solid #DDE1EE;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;color:#1B2B6B;">✔️ Definidos · '+(games.length-tbdCount)+'</td></tr>';
+      }
+      h += '<tr style="border-bottom:1px solid #EEF0F6;'+(g.tbd?'background:rgba(245,197,24,.03);':'')+'">';
       h += '<td style="padding:11px 14px;font-size:.8rem;white-space:nowrap;">'+Utils.formatDateTime(g.date)+'</td>';
       h += '<td style="padding:11px 14px;font-size:.85rem;font-weight:600;">'+(g.tbd?'A definir':(flag(g.home))+' '+g.home+' × '+g.away+' '+(flag(g.away)))+'</td>';
       h += '<td style="padding:11px 14px;"><span style="background:rgba(27,43,107,.08);color:#1B2B6B;padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;">'+Utils.phaseName(g.phase)+'</span></td>';
