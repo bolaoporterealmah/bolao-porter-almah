@@ -16,6 +16,9 @@ SPA.pages["palpites"]={style:``,script:function(){
     qualified: (saved.qualified || []).slice()
   };
 
+  // Resultado oficial (settings.final_results) — usado p/ mostrar acertos + pontos.
+  var finalResults = DB.getFinalResults() || null;
+
   var pc = document.getElementById('pageContent');
   if (!pc) return;
 
@@ -122,6 +125,9 @@ SPA.pages["palpites"]={style:``,script:function(){
     }
     h += '</div>';
 
+    // Acertos + pontuação (quando o resultado oficial já foi publicado)
+    h += specialsResultsCard();
+
     // Podium cards
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:22px;">';
     h += podiumCard('champion','🏆','Campeão','+50 pts','#FFD700','#FFA500','rgba(0,0,0,.65)');
@@ -135,6 +141,76 @@ SPA.pages["palpites"]={style:``,script:function(){
     h += '</div>';
 
     pc.innerHTML = h;
+  }
+
+  // ── Card de acertos + pontuação dos especiais ────────────────────────────
+  function specialsResultsCard() {
+    var fr = finalResults;
+    if (!fr) return '';
+    var hasPodium = !!(fr.champion || fr.runner_up || fr.third);
+    var frQual = fr.qualified || [];
+    // Nada publicado ainda → não mostra o card.
+    if (!hasPodium && !frQual.length) return '';
+
+    var qualHits = sel.qualified.filter(function(t){ return frQual.indexOf(t) >= 0; });
+    var champOk  = fr.champion  && sel.champion  === fr.champion;
+    var viceOk   = fr.runner_up && sel.runner_up === fr.runner_up;
+    var thirdOk  = fr.third     && sel.third     === fr.third;
+    var total = (champOk?50:0) + (viceOk?25:0) + (thirdOk?15:0) + qualHits.length*5;
+
+    function podiumRow(icon, label, pick, official, ok, pts) {
+      var showResult = !!official;
+      var bg = ok ? 'rgba(34,197,94,.08)' : (showResult ? 'rgba(239,68,68,.05)' : '#F8F9FC');
+      var h = '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:'+bg+';border-radius:10px;">';
+      h += '<span style="font-size:1.3rem;">'+icon+'</span>';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">'+label+'</div>';
+      h += '<div style="font-size:.82rem;font-weight:700;color:#2D3557;">'+(pick?(flag(pick)+' '+esc(pick)):'<span style="color:#C0C5D6;">— sem palpite</span>')+'</div>';
+      if (showResult && !ok) h += '<div style="font-size:.66rem;color:#9CA3BF;">Oficial: '+flag(official)+' '+esc(official)+'</div>';
+      h += '</div>';
+      if (ok) h += '<span style="background:rgba(34,197,94,.15);color:#16A34A;padding:3px 10px;border-radius:99px;font-weight:800;font-size:.72rem;white-space:nowrap;">✓ +'+pts+'</span>';
+      else if (showResult) h += '<span style="color:#C0C5D6;font-size:.9rem;">✕</span>';
+      h += '</div>';
+      return h;
+    }
+
+    var h = '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;overflow:hidden;margin-bottom:22px;">';
+    // Header com total
+    h += '<div style="background:linear-gradient(135deg,#16A34A,#15803D);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;color:white;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.4rem;">🎉</span>';
+    h += '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:.95rem;font-weight:800;text-transform:uppercase;">Seus Acertos</div>';
+    h += '<div style="font-size:.68rem;opacity:.85;">Pontos dos palpites especiais</div></div></div>';
+    h += '<div style="text-align:right;"><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:2rem;font-weight:900;line-height:1;">+'+total+'</div><div style="font-size:.62rem;opacity:.85;text-transform:uppercase;font-weight:700;">pontos</div></div>';
+    h += '</div>';
+    h += '<div style="padding:14px 18px;">';
+
+    if (hasPodium) {
+      h += '<div style="display:grid;gap:8px;margin-bottom:12px;">';
+      h += podiumRow('🏆','Campeão',    sel.champion,  fr.champion,  champOk, 50);
+      h += podiumRow('🥈','Vice',       sel.runner_up, fr.runner_up, viceOk,  25);
+      h += podiumRow('🥉','3º Lugar',   sel.third,     fr.third,     thirdOk, 15);
+      h += '</div>';
+    }
+
+    // Classificados acertados
+    h += '<div style="background:#F8F9FC;border-radius:10px;padding:12px;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+    h += '<span style="font-size:.68rem;font-weight:800;text-transform:uppercase;color:#1B2B6B;">⚡ Classificados acertados</span>';
+    h += '<span style="background:'+(qualHits.length?'rgba(34,197,94,.15)':'#EEF0F6')+';color:'+(qualHits.length?'#16A34A':'#9CA3BF')+';padding:3px 10px;border-radius:99px;font-weight:800;font-size:.72rem;">'+qualHits.length+' ✓ · +'+(qualHits.length*5)+'</span>';
+    h += '</div>';
+    if (qualHits.length) {
+      h += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+      qualHits.slice().sort(function(a,b){return a.localeCompare(b,'pt');}).forEach(function(t){
+        h += '<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:99px;padding:3px 9px;font-size:.75rem;font-weight:600;color:#15803D;">'+flag(t)+' '+esc(t)+'</span>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div style="font-size:.75rem;color:#9CA3BF;">Nenhum classificado acertado ainda.</div>';
+    }
+    h += '</div>';
+
+    h += '</div></div>';
+    return h;
   }
 
   // ── Update only the qualified section (no full re-render) ────────────────
@@ -168,10 +244,16 @@ SPA.pages["palpites"]={style:``,script:function(){
 
     // Current selection display
     if (current) {
-      h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(27,43,107,.05);border-radius:10px;margin-bottom:10px;">';
+      // Acerto do pódio (quando o oficial já saiu): verde=acertou, vermelho=errou.
+      var official = finalResults ? finalResults[field] : null;
+      var pStatus = official ? (current === official ? 'hit' : 'miss') : null;
+      var selBg = pStatus==='hit' ? 'rgba(34,197,94,.12)' : (pStatus==='miss' ? 'rgba(239,68,68,.1)' : 'rgba(27,43,107,.05)');
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:'+selBg+';border-radius:10px;margin-bottom:10px;'+(pStatus?'border:1.5px solid '+(pStatus==='hit'?'#16A34A':'#DC2626')+';':'')+'">';
       h += teamFlag(current, '2.2rem');
       h += '<div style="flex:1;"><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Selecionado</div>';
-      h += '<div style="font-weight:800;color:#1B2B6B;">'+current+'</div></div>';
+      h += '<div style="font-weight:800;color:#1B2B6B;">'+current+(pStatus==='hit'?' <span style="color:#16A34A;">✓ +'+pts.replace(/[^0-9]/g,'')+'</span>':'')+(pStatus==='miss'?' <span style="color:#DC2626;">✗</span>':'')+'</div>';
+      if (pStatus==='miss') h += '<div style="font-size:.64rem;color:#9CA3BF;">Oficial: '+flag(official)+' '+esc(official)+'</div>';
+      h += '</div>';
       if (!LOCKED) h += '<button data-pick="'+field+'|'+current+'" style="background:none;border:none;cursor:pointer;font-size:.72rem;color:#9CA3BF;padding:4px;">✕ trocar</button>';
       h += '</div>';
     } else if (!LOCKED) {
@@ -197,6 +279,24 @@ SPA.pages["palpites"]={style:``,script:function(){
     return h;
   }
 
+  // Resultado oficial dos classificados já publicado?
+  function qualPublished() {
+    return !!(finalResults && finalResults.qualified && finalResults.qualified.length);
+  }
+  // Estado de um time na grade de classificados (só após publicação):
+  // 'hit'  = escolhido e classificou (acertou)
+  // 'miss' = escolhido e NÃO classificou (errou)
+  // 'gap'  = classificou mas você NÃO escolheu (deixou passar)
+  function qualCellStatus(t) {
+    if (!qualPublished()) return null;
+    var picked = sel.qualified.indexOf(t) >= 0;
+    var classified = finalResults.qualified.indexOf(t) >= 0;
+    if (picked && classified) return 'hit';
+    if (picked && !classified) return 'miss';
+    if (!picked && classified) return 'gap';
+    return null;
+  }
+
   // ── Qualified section ─────────────────────────────────────────────────────
   function qualifiedSection() {
     var h = '';
@@ -209,13 +309,28 @@ SPA.pages["palpites"]={style:``,script:function(){
     h += '</div>';
     h += '<div style="padding:14px 18px;">';
     h += '<div id="qual-chips">'+chipsHtml()+'</div>';
+    // Legenda (só quando o resultado já saiu)
+    if (qualPublished()) {
+      h += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:.66rem;font-weight:600;color:#5A6385;">';
+      h += '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:3px;background:rgba(34,197,94,.2);border:2px solid #16A34A;"></span> acertou (+5)</span>';
+      h += '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:3px;background:rgba(239,68,68,.15);border:2px solid #DC2626;"></span> errou</span>';
+      h += '<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:11px;height:11px;border-radius:3px;background:white;border:2px dashed #16A34A;"></span> classificou (não escolheu)</span>';
+      h += '</div>';
+    }
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;">';
     ALL_TEAMS.slice().sort(function(a,b){return a.localeCompare(b,'pt');}).forEach(function(t) {
       var isSel = sel.qualified.indexOf(t) >= 0;
-      h += '<button data-qualify="'+t+'" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 3px;';
-      h += 'background:'+(isSel?'rgba(27,43,107,.1)':'white')+';';
-      h += 'border:'+(isSel?'2px solid #1B2B6B':'1px solid #DDE1EE')+';';
+      var st = qualCellStatus(t);
+      var bg, border, badge = '';
+      if (st === 'hit')      { bg='rgba(34,197,94,.15)'; border='2px solid #16A34A'; badge='<span style="position:absolute;top:2px;right:3px;font-size:.7rem;color:#16A34A;font-weight:900;">✓</span>'; }
+      else if (st === 'miss'){ bg='rgba(239,68,68,.12)'; border='2px solid #DC2626'; badge='<span style="position:absolute;top:2px;right:3px;font-size:.7rem;color:#DC2626;font-weight:900;">✗</span>'; }
+      else if (st === 'gap') { bg='white'; border='2px dashed #16A34A'; }
+      else                   { bg=(isSel?'rgba(27,43,107,.1)':'white'); border=(isSel?'2px solid #1B2B6B':'1px solid #DDE1EE'); }
+      h += '<button data-qualify="'+t+'" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 3px;';
+      h += 'background:'+bg+';';
+      h += 'border:'+border+';';
       h += 'border-radius:8px;cursor:'+(LOCKED?'default':'pointer')+';font-family:inherit;">';
+      h += badge;
       h += teamFlag(t, '1.6rem');
       h += '<span style="font-size:.58rem;font-weight:700;text-align:center;color:#2D3557;line-height:1.2;">'+t+'</span>';
       h += '</button>';
@@ -228,8 +343,12 @@ SPA.pages["palpites"]={style:``,script:function(){
     if (!sel.qualified.length) return '';
     var h = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">';
     sel.qualified.forEach(function(t) {
-      h += '<span data-remove="'+t+'" style="display:inline-flex;align-items:center;gap:4px;background:rgba(27,43,107,.08);border:1px solid rgba(27,43,107,.2);border-radius:99px;padding:3px 9px;font-size:.75rem;font-weight:600;cursor:'+(LOCKED?'default':'pointer')+';">';
-      h += flag(t)+' '+t;
+      var st = qualCellStatus(t); // 'hit' | 'miss' | null
+      var bg = st==='hit' ? 'rgba(34,197,94,.12)' : (st==='miss' ? 'rgba(239,68,68,.1)' : 'rgba(27,43,107,.08)');
+      var bd = st==='hit' ? 'rgba(34,197,94,.4)'  : (st==='miss' ? 'rgba(239,68,68,.35)' : 'rgba(27,43,107,.2)');
+      var mark = st==='hit' ? ' <span style="color:#16A34A;font-weight:900;">✓</span>' : (st==='miss' ? ' <span style="color:#DC2626;font-weight:900;">✗</span>' : '');
+      h += '<span data-remove="'+t+'" style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';border:1px solid '+bd+';border-radius:99px;padding:3px 9px;font-size:.75rem;font-weight:600;cursor:'+(LOCKED?'default':'pointer')+';">';
+      h += flag(t)+' '+t+mark;
       if (!LOCKED) h += ' <span style="opacity:.5;font-size:.7rem;">✕</span>';
       h += '</span>';
     });
@@ -240,6 +359,20 @@ SPA.pages["palpites"]={style:``,script:function(){
   // ── Boot ──────────────────────────────────────────────────────────────────
   // Sync specials from Supabase before rendering
   (async function() {
+    // Resultado oficial (settings.final_results) — fresco do servidor p/ os acertos.
+    try {
+      var frRes = await fetch(SUPABASE_URL + '/rest/v1/settings?key=eq.final_results&select=value&limit=1', {
+        headers: Sess.headers(false)
+      });
+      if (frRes.ok) {
+        var frData = await frRes.json();
+        if (frData && frData.length && frData[0].value) {
+          finalResults = frData[0].value;
+          DB.set('final_results', finalResults); // cache local (sem re-upsert no servidor)
+        }
+      }
+    } catch(e) {}
+
     // Load directly from Supabase
     try {
       var sbRes = await fetch(SUPABASE_URL + '/rest/v1/specials?user_email=eq.' + encodeURIComponent(user.email) + '&select=*&limit=1', {

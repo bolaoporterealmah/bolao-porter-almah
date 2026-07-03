@@ -349,10 +349,25 @@ window.openParticipantResultsModal = async function(email) {
     rows += '</div>';
   });
 
-  var head = '<div style="display:flex;gap:8px;margin-bottom:12px;">';
-  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Jogos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#1B2B6B;line-height:1;">'+games.length+'</div></div>';
-  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Exatos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#16A34A;line-height:1;">'+exactCount+'</div></div>';
-  head += '<div style="flex:1;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">Pontos</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:#D4A80F;line-height:1;">'+totalPts+'</div></div>';
+  // Pontos de palpites especiais = total do ranking (jogos + especiais, autoritativo no
+  // servidor) − soma dos pontos de jogos calculada aqui. Scoring do cliente e a RPC ranking
+  // usam a MESMA fórmula/multiplicadores, então a subtração devolve exatamente os especiais.
+  var rankRow = (DB.getRanking() || []).find(function(x){ return x.email === email; });
+  var grand = (rankRow && typeof rankRow.totalPts === 'number') ? rankRow.totalPts : null;
+  var specPts = (grand != null) ? Math.max(0, grand - totalPts) : null;
+
+  function statCard(label, val, color) {
+    return '<div style="flex:1 1 84px;background:#F8F9FC;border-radius:10px;padding:9px;text-align:center;"><div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">'+label+'</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.4rem;font-weight:900;color:'+color+';line-height:1;">'+val+'</div></div>';
+  }
+
+  var head = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">';
+  head += statCard('Jogos', games.length, '#1B2B6B');
+  head += statCard('Exatos', exactCount, '#16A34A');
+  head += statCard('Pts Palpites', totalPts, '#3D5AC8');
+  if (specPts != null) {
+    head += statCard('Pts Especiais', specPts, '#D4A80F');
+    head += statCard('Total', grand, '#1B2B6B');
+  }
   head += '</div>';
 
   body.innerHTML = head + rows;

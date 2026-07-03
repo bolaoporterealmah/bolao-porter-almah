@@ -7,6 +7,7 @@ var editingGameId = null;
 var selectedApi = 'thesportsdb';
 var apiKey = '';
 var fetchedResults = [];
+var qualifiedSel = null; // seleção de times classificados (settings.final_results.qualified)
 
 // ── Render ───────────────────────────────────────────────────────────────────
 function render() {
@@ -36,6 +37,7 @@ function render() {
     ['results','⚽ Resultados'],
     ['api','🌐 Buscar via API'],
     ['games','📋 Jogos'],
+    ['specials','🎖️ Classificados'],
     ['users','👥 Participantes'],
     ['ranking_admin','🏆 Ranking']
   ].forEach(function(t){
@@ -224,8 +226,90 @@ function render() {
     h += '</tbody></table></div></div>';
   }
 
+  // ── Tab: Classificados (settings.final_results.qualified) ──────────────────
+  else if (activeTab === 'specials') {
+    var fr = DB.getFinalResults() || {};
+    if (qualifiedSel === null) qualifiedSel = (fr.qualified || []).slice();
+
+    // Times que jogam as Oitavas (round_of_16) = classificados, fonte da verdade.
+    var oitavasTeams = r16Teams(games);
+    // Pool de seleção: todos os times já cadastrados nos jogos.
+    var pool = allGameTeams(games);
+    // Divergência entre o salvo e as Oitavas atuais.
+    var missing = oitavasTeams.filter(function(t){ return qualifiedSel.indexOf(t) < 0; });
+    var extra = qualifiedSel.filter(function(t){ return oitavasTeams.indexOf(t) < 0; });
+
+    h += '<div style="background:rgba(27,43,107,.04);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;font-size:.82rem;color:#5A6385;">';
+    h += '<span style="font-size:1.2rem;">🎖️</span>';
+    h += '<div>Define quais seleções passaram para as <strong>Oitavas</strong>. Cada acerto vale <strong>+5 pts</strong> nos palpites especiais. Use <strong>Preencher pelas Oitavas</strong> para puxar automaticamente os times dos jogos de mata-mata cadastrados, revise e clique em <strong>Salvar</strong>.</div>';
+    h += '</div>';
+
+    // Barra de ação
+    h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:16px 18px;margin-bottom:16px;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;">';
+    h += '<span style="background:'+(qualifiedSel.length===16?'#16A34A':'#1B2B6B')+';color:white;padding:5px 14px;border-radius:99px;font-weight:800;font-size:.9rem;">'+qualifiedSel.length+'/16</span>';
+    h += '<span style="font-size:.78rem;color:#9CA3BF;">'+oitavasTeams.length+' time(s) já definidos nas Oitavas</span>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    h += '<button id="btn-autofill-qual" style="padding:8px 16px;background:#EEF0F6;border:1px solid #DDE1EE;border-radius:9px;font-weight:700;font-size:.82rem;cursor:pointer;color:#1B2B6B;">⚡ Preencher pelas Oitavas</button>';
+    h += '<button id="btn-save-qual" style="padding:8px 18px;background:#1B2B6B;color:white;border:none;border-radius:9px;font-weight:700;font-size:.82rem;cursor:pointer;">💾 Salvar</button>';
+    h += '</div></div>';
+
+    // Aviso de divergência com as Oitavas
+    if (missing.length || extra.length) {
+      h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:9px;padding:10px 12px;font-size:.76rem;color:#92400E;">';
+      h += '⚠️ Seleção difere das Oitavas cadastradas.';
+      if (missing.length) h += ' Faltando: <strong>'+missing.map(esc).join(', ')+'</strong>.';
+      if (extra.length) h += ' Sobrando: <strong>'+extra.map(esc).join(', ')+'</strong>.';
+      h += '</div>';
+    }
+    h += '</div>';
+
+    // Grade de seleção
+    h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:16px 18px;">';
+    if (!pool.length) {
+      h += '<div style="padding:20px;text-align:center;color:#9CA3BF;font-size:.85rem;">Nenhum time cadastrado nos jogos ainda.</div>';
+    } else {
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;">';
+      pool.forEach(function(t){
+        var isSel = qualifiedSel.indexOf(t) >= 0;
+        var inOitavas = oitavasTeams.indexOf(t) >= 0;
+        h += '<button data-qualtoggle="'+esc(t)+'" style="display:flex;align-items:center;gap:6px;padding:8px 10px;text-align:left;';
+        h += 'background:'+(isSel?'rgba(27,43,107,.1)':'white')+';';
+        h += 'border:'+(isSel?'2px solid #1B2B6B':'1px solid #DDE1EE')+';';
+        h += 'border-radius:9px;cursor:pointer;font-family:inherit;">';
+        h += teamFlag(t,'1.4rem');
+        h += '<span style="font-size:.74rem;font-weight:700;color:#2D3557;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(t)+'</span>';
+        if (inOitavas) h += '<span title="Está nas Oitavas" style="font-size:.7rem;">🎯</span>';
+        h += '</button>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
   pc.innerHTML = h;
   bindEvents(pc);
+}
+
+// Times distintos (não-nulos) dos jogos de Oitavas (round_of_16) = classificados.
+function r16Teams(games) {
+  var set = [];
+  games.forEach(function(g){
+    if (g.phase !== 'round_of_16' || g.tbd) return;
+    [g.home, g.away].forEach(function(t){ if (t && set.indexOf(t) < 0) set.push(t); });
+  });
+  return set;
+}
+
+// Todos os times distintos que aparecem em qualquer jogo cadastrado.
+function allGameTeams(games) {
+  var set = [];
+  games.forEach(function(g){
+    [g.home, g.away].forEach(function(t){ if (t && set.indexOf(t) < 0) set.push(t); });
+  });
+  return set.sort(function(a,b){ return a.localeCompare(b,'pt'); });
 }
 
 function sCard(label, val, color) {
@@ -298,6 +382,49 @@ function bindEvents(pc) {
     // Apply API results
     var applyBtn = e.target.closest('#btn-apply-api');
     if (applyBtn) { applyApiResults(); return; }
+
+    // Classificados: toggle de time
+    var qt = e.target.closest('[data-qualtoggle]');
+    if (qt) {
+      var qteam = qt.getAttribute('data-qualtoggle');
+      if (qualifiedSel === null) qualifiedSel = [];
+      var qi = qualifiedSel.indexOf(qteam);
+      if (qi >= 0) qualifiedSel.splice(qi, 1);
+      else {
+        if (qualifiedSel.length >= 16) { Utils.toast('Máximo 16 classificados','error'); return; }
+        qualifiedSel.push(qteam);
+      }
+      render();
+      return;
+    }
+
+    // Classificados: preencher automaticamente pelas Oitavas (round_of_16)
+    var afq = e.target.closest('#btn-autofill-qual');
+    if (afq) {
+      var teams = r16Teams(DB.getGames());
+      if (!teams.length) { Utils.toast('Nenhum jogo de Oitavas com times definidos ainda','error'); return; }
+      qualifiedSel = teams.slice(0, 16);
+      Utils.toast(qualifiedSel.length+' classificado(s) preenchido(s) pelas Oitavas','success');
+      render();
+      return;
+    }
+
+    // Classificados: salvar em settings.final_results.qualified
+    var sq = e.target.closest('#btn-save-qual');
+    if (sq) {
+      var sel = (qualifiedSel || []).slice();
+      var merged = Object.assign({}, DB.getFinalResults() || {}, { qualified: sel });
+      sq.disabled = true; var _o = sq.textContent; sq.textContent = '⏳ Salvando...';
+      Promise.resolve(DB.saveFinalResults(merged)).then(function(){
+        Utils.toast('Classificados salvos! ✓','success');
+        if (window.syncRankingFromSupabase) return window.syncRankingFromSupabase();
+      }).catch(function(err){
+        Utils.toast('Falha ao salvar: '+(err&&err.message||err),'error');
+      }).then(function(){
+        sq.disabled = false; sq.textContent = _o;
+      });
+      return;
+    }
 
     // Games tab actions
     var editGame = e.target.closest('[data-editgame]');

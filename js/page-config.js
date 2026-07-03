@@ -112,7 +112,9 @@ function bindEvents(pc) {
     var vice = (document.getElementById('frVice')||{}).value||'';
     var third = (document.getElementById('frThird')||{}).value||'';
     if (!champ) { Utils.toast('Informe ao menos o campeão','error'); return; }
-    DB.saveFinalResults({champion:champ, runner_up:vice, third:third});
+    // Mescla p/ não apagar os classificados (qualified) já salvos.
+    var merged = Object.assign({}, DB.getFinalResults() || {}, {champion:champ, runner_up:vice, third:third});
+    DB.saveFinalResults(merged);
     Utils.toast('Resultados finais salvos! ✓','success');
   });
 
@@ -314,7 +316,8 @@ function saveFinalResults() {
   var vice = (document.getElementById('frVice')||{}).value||'';
   var third = (document.getElementById('frThird')||{}).value||'';
   if (!champ) { Utils.toast('Informe ao menos o campeão','error'); return; }
-  DB.saveFinalResults({champion:champ, runner_up:vice, third:third});
+  var merged = Object.assign({}, DB.getFinalResults() || {}, {champion:champ, runner_up:vice, third:third});
+  DB.saveFinalResults(merged);
   Utils.toast('Resultados finais salvos! ✓','success');
 }
 
