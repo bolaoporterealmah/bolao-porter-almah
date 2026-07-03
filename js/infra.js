@@ -586,27 +586,13 @@ DB.saveSpecials = async function(userId, data) {
   } catch(e) { console.warn('[Supabase] saveSpecials failed', e.message); }
 };
 
-// Override saveGames (admin inserting results)
-var _origSaveGames = DB.saveGames.bind(DB);
-DB.saveGames = async function(games) {
-  _origSaveGames(games);
-  try {
-    // Find games with results and update Supabase
-    var withResults = games.filter(function(g){ return g.result; });
-    for (var i=0; i<withResults.length; i++) {
-      var g = withResults[i];
-      await SB.upsert('games', {
-        id: g.id, phase: g.phase, group: g.group||null,
-        home: g.home||null, away: g.away||null,
-        date: g.date, city: g.city||null, stadium: g.stadium||null,
-        result_home: g.result.home_score,
-        result_away: g.result.away_score,
-        tbd: g.tbd||false
-      });
-    }
-    if (window.syncRankingFromSupabase) await syncRankingFromSupabase(); // resultado mudou → recalcula ranking
-  } catch(e) { console.warn('[Supabase] saveGames failed:', e.message); }
-};
+// DB.saveGames é APENAS cache local. Persistência no servidor é feita pelas funções
+// dedicadas de 1 linha, chamadas explicitamente por quem edita:
+//   • upsertGame(game)                → cadastro/edição de 1 jogo
+//   • upsertGameResult(id, h, a)      → salvar/limpar placar de 1 jogo (+ recalcula ranking)
+//   • deleteGame(id)                  → remover 1 jogo
+// Antes, o override reenviava TODOS os jogos com resultado a cada saveGames (flood de POST).
+var _origSaveGames = DB.saveGames.bind(DB);   // usado pelo sync periódico (só cache)
 
 // Salva/limpa o resultado de UM jogo só (PATCH numa linha) → dispara 1 rebuild da trigger.
 // Passe (gid, null, null) para REMOVER o resultado (corrige typo). Antes o save mandava

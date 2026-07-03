@@ -595,7 +595,7 @@ async function fetchFromApi() {
 function applyApiResults() {
   if (!fetchedResults.length) return;
   var games = DB.getGames();
-  var applied = 0;
+  var appliedGames = [];
   fetchedResults.forEach(function(r) {
     var g = games.find(function(g) {
       if (!g.home||!g.away||g.result) return false;
@@ -604,10 +604,17 @@ function applyApiResults() {
       return (gh.includes(rh.substring(0,5))||rh.includes(gh.substring(0,5)))&&
              (ga.includes(ra.substring(0,5))||ra.includes(ga.substring(0,5)));
     });
-    if (g) { g.result={home_score:r.home_score,away_score:r.away_score}; applied++; }
+    if (g) { g.result={home_score:r.home_score,away_score:r.away_score}; appliedGames.push(g); }
   });
+  var applied = appliedGames.length;
   if (applied>0) {
-    DB.saveGames(games);
+    DB.set('games', games);   // cache local
+    // Persiste só os jogos aplicados (1 PATCH cada); o último recalcula o ranking.
+    if (window.upsertGameResult) {
+      Promise.all(appliedGames.map(function(g){
+        return window.upsertGameResult(g.id, g.result.home_score, g.result.away_score).catch(function(e){ console.warn('[API apply]', g.id, e.message); });
+      })).then(function(){ render(); });
+    }
     Utils.toast(applied+' resultado(s) aplicado(s)! ✓','success');
     render();
   } else {
