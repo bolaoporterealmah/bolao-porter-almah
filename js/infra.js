@@ -144,7 +144,7 @@ async function initSupabase() {
           tbd: g.tbd, desc: g.description
         };
       });
-      DB.saveGames(mapped);
+      DB.set('games', mapped);   // só cache local; NÃO usa DB.saveGames (que reenviaria todos os jogos via POST)
       console.log('[Supabase] Loaded', games.length, 'games');
     } else {
       // First run: seed games to Supabase
@@ -171,7 +171,7 @@ async function initSupabase() {
     var settings = await SB.get('settings', 'select=*');
     if (settings) {
       settings.forEach(function(s) {
-        if (s.key === 'final_results') DB.saveFinalResults(s.value);
+        if (s.key === 'final_results') DB.set('final_results', s.value); // só cache; NÃO reenvia (evita POST /settings no load)
       });
     }
 
@@ -395,14 +395,18 @@ window.syncBetsFromSupabase = async function() {
 // Ranking calculado no servidor (RPC public.ranking) — só agregado, nunca palpite cru de outro
 window.syncRankingFromSupabase = async function() {
   try {
-    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ranking', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    // Prefere ranking_ext (com split jogos/especiais + acertos); cai pra ranking se não existir.
+    var r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ranking_ext', { method: 'POST', headers: Sess.headers(), body: '{}' });
+    if (!r.ok) r = await fetch(SUPABASE_URL + '/rest/v1/rpc/ranking', { method: 'POST', headers: Sess.headers(), body: '{}' });
     if (!r.ok) return false;
     var rows = await r.json();
     var mapped = (rows || []).map(function(u){ return {
       email: u.email, name: u.name, company: u.company, role: u.role, initials: u.initials,
       totalPts: u.total_pts, exactScores: u.exact_scores, correctWinners: u.correct_winners,
       goalDiff: u.goal_diff, oneTeam: u.one_team,
-      betCount: u.bet_count, totalBets: u.total_bets, avgBetTime: u.avg_bet_time, position: u.pos
+      betCount: u.bet_count, totalBets: u.total_bets, avgBetTime: u.avg_bet_time, position: u.pos,
+      // v2 (ranking_v2_split.sql): split de pontos + palpites que pontuaram. undefined se RPC antiga.
+      gamePts: u.game_pts, specPts: u.spec_pts, scoredBets: u.scored_bets
     }; });
     DB.set('ranking', mapped);
     return true;
