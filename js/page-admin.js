@@ -739,8 +739,14 @@ async function openUserBetsModal(email) {
   var betMap = {};
   betsArr.forEach(function(b){ betMap[b.game_id] = b; });
 
+  // Ordena pela data em que o jogo aconteceria (asc). Datas inválidas vão pro fim.
   var games = DB.getGames().filter(function(g){ return !g.tbd && g.home && g.away; })
-    .sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+    .sort(function(a,b){
+      var ta = new Date(a.date).getTime(), tb = new Date(b.date).getTime();
+      if (isNaN(ta)) ta = Infinity;
+      if (isNaN(tb)) tb = Infinity;
+      return ta - tb;
+    });
 
   function fmtTs(ts){ if(!ts) return ''; var d=new Date(ts); if(isNaN(d.getTime())) return ''; var p=function(n){return ('0'+n).slice(-2);}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
 
@@ -754,7 +760,8 @@ async function openUserBetsModal(email) {
     h += '<div style="display:flex;align-items:center;gap:7px;padding:8px 4px;border-bottom:1px solid #F1F3F8;">';
     h += '<div style="flex:1;min-width:0;">';
     h += '<div style="font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+flag(g.home)+' '+esc(g.home)+' × '+esc(g.away)+' '+flag(g.away)+'</div>';
-    h += '<div style="font-size:.6rem;color:'+(b&&b.saved_at?'#9CA3BF':'#C0C5D6')+';margin-top:2px;" title="Data do palpite">'+when+'</div>';
+    h += '<div style="font-size:.6rem;color:#5A6385;margin-top:2px;font-weight:600;" title="Data do jogo">📅 '+Utils.formatDateTime(g.date)+' · '+Utils.phaseName(g.phase)+(g.group?' · Gr '+g.group:'')+'</div>';
+    h += '<div style="font-size:.58rem;color:'+(b&&b.saved_at?'#9CA3BF':'#C0C5D6')+';margin-top:1px;" title="Quando o palpite foi enviado">'+when+'</div>';
     h += '</div>';
     h += '<span style="font-size:.6rem;color:#9CA3BF;white-space:nowrap;" title="Resultado oficial">R:'+res+'</span>';
     h += '<input id="ab-h-'+g.id+'" type="number" min="0" value="'+bh+'" style="width:36px;padding:5px 2px;border:1.5px solid #DDE1EE;border-radius:7px;text-align:center;font-size:.85rem;"/>';
