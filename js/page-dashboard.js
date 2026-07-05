@@ -206,7 +206,8 @@ SPA.pages["dashboard"]={style:`
         if(bet){
           var sc=Scoring.calculate(bet,{home_score:g.result.home_score,away_score:g.result.away_score,phase:g.phase});
           var ok=sc&&sc.total>0;
-          badge='<span title="Seu palpite: '+bet.home_score+'×'+bet.away_score+'" style="font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap;background:'+(ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')+';color:'+(ok?'#16A34A':'#DC2626')+';">'+(ok?'+'+sc.total:'0')+'</span>';
+          var multD=sc?(sc.multiplier||1):1;
+          badge='<span title="Palpite '+bet.home_score+'×'+bet.away_score+' — '+(sc?Scoring.breakdownText(sc):'')+'" style="font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:99px;white-space:nowrap;cursor:help;background:'+(ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')+';color:'+(ok?'#16A34A':'#DC2626')+';">'+(ok?'+'+sc.total:'0')+(ok&&multD>1?' 🔥'+multD+'×':'')+'</span>';
         } else {
           badge='<span style="font-size:.64rem;color:#C0C5D6;">sem palpite</span>';
         }

@@ -338,6 +338,11 @@ SPA.pages["apostas"]={style:`.phase-section { margin-bottom: 28px; }
 
     h += '</div>'; // teams row
 
+    // Fonte de cada ponto (largura total, abaixo dos times) — evita quebrar as colunas
+    if (isFinished && sc && sc.total > 0) {
+      h += '<div style="margin-bottom:10px;padding-top:10px;border-top:1px solid #EEF0F6;">'+Scoring.breakdownHtml(sc)+'</div>';
+    }
+
     if (!isFinished && typeof Odds !== 'undefined') h += Odds.barHtml(game);
 
     // Footer

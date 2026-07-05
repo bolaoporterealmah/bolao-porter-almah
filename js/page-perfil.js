@@ -114,9 +114,10 @@ SPA.pages["perfil"]={style:`.profile-header {
 
       bettedGames.forEach(function(g) {
         var bet = bets[g.id];
-        var pts = null;
+        var pts = null, scP = null;
         if (g.result) {
-          pts = Scoring.calculate(bet, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase}).total;
+          scP = Scoring.calculate(bet, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase});
+          pts = scP.total;
         }
         var exact = g.result && bet.home_score===g.result.home_score && bet.away_score===g.result.away_score;
 
@@ -133,7 +134,8 @@ SPA.pages["perfil"]={style:`.profile-header {
         h += '</td>';
         h += '<td style="padding:10px 14px;text-align:right;">';
         if (pts !== null) {
-          h += '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;font-weight:900;color:'+(pts>0?'#16A34A':'#DC2626')+'">'+(pts>0?'+'+pts:'0')+'</span>';
+          var multP = scP ? (scP.multiplier||1) : 1;
+          h += '<span title="'+(scP?Scoring.breakdownText(scP):'')+'" style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;font-weight:900;cursor:help;color:'+(pts>0?'#16A34A':'#DC2626')+'">'+(pts>0?'+'+pts:'0')+(pts>0&&multP>1?' <span style="font-family:inherit;font-size:.6rem;background:#7C3AED;color:white;padding:0 5px;border-radius:99px;vertical-align:middle;">🔥'+multP+'×</span>':'')+'</span>';
         } else {
           h += '<span style="font-size:.75rem;color:#9CA3BF;">—</span>';
         }

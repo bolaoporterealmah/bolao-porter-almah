@@ -189,7 +189,8 @@ SPA.pages["apostas_dia"]={style:"",script:function(){
 
           h += '<td style="padding:9px 12px;text-align:center;">';
           if (isFinished && pts !== null) {
-            h += '<span style="font-size:.82rem;font-weight:800;color:'+(pts>0?'#16A34A':'#DC2626')+'">'+(pts>0?'+'+pts+' pts':'Errou')+'</span>';
+            var multD = sc ? (sc.multiplier||1) : 1;
+            h += '<span title="'+(sc?Scoring.breakdownText(sc):'')+'" style="font-size:.82rem;font-weight:800;color:'+(pts>0?'#16A34A':'#DC2626')+';cursor:help;">'+(pts>0?'+'+pts+' pts':'Errou')+(pts>0&&multD>1?' <span style="background:#7C3AED;color:white;padding:0 5px;border-radius:99px;font-size:.6rem;">🔥'+multD+'×</span>':'')+'</span>';
           } else {
             h += '<span style="font-size:.72rem;color:#9CA3BF;">—</span>';
           }

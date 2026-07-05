@@ -349,9 +349,7 @@ window.openParticipantResultsModal = async function(email) {
     rows += '<span style="color:#5A6385;">Palpite: <strong style="color:#2D3557;">'+b.home_score+' × '+b.away_score+'</strong>'+(isExact?' 🎯':'')+'</span>';
     rows += '<span style="background:'+(pts>0?'rgba(34,197,94,.12)':'rgba(0,0,0,.05)')+';color:'+(pts>0?'#16A34A':'#9CA3BF')+';padding:2px 10px;border-radius:99px;font-weight:800;">'+(pts>0?'+'+pts+' pts':'0 pts')+'</span>';
     rows += '</div>';
-    if (mult>1 && pts>0) {
-      rows += '<div style="margin-top:6px;font-size:.64rem;color:#7C3AED;display:flex;gap:6px;flex-wrap:wrap;"><span style="background:rgba(124,58,237,.1);padding:2px 7px;border-radius:6px;font-weight:700;">'+base+' base × '+mult+' = '+pts+'</span><span style="font-weight:700;">🔥 +'+bonus+' de bônus</span></div>';
-    }
+    if (pts>0) { rows += '<div style="margin-top:6px;">'+Scoring.breakdownHtml(sc)+'</div>'; }
     rows += '</div>';
   });
 

@@ -57,19 +57,12 @@ SPA.pages["resultados"]={style:``,script:function(){
       h += '<div style="padding:10px 14px;border-top:1px solid #EEF0F6;font-size:.75rem;'+(iCravei?'background:rgba(245,197,24,.1);':'')+'">';
       if (bet) {
         var pts = sc ? sc.total : 0;
-        var base = sc ? sc.base : 0;
-        var bonus = pts - base;
         h += '<div style="display:flex;align-items:center;justify-content:space-between;">';
         h += '<span style="color:#5A6385;">Seu palpite: <strong style="color:'+(iCravei?'#B8860B':'#2D3557')+';">'+bet.home_score+' × '+bet.away_score+'</strong>'+(iCravei?' 🎯':'')+'</span>';
         h += '<span style="background:'+(pts>0?'rgba(34,197,94,.12)':'rgba(0,0,0,.05)')+';color:'+(pts>0?'#16A34A':'#9CA3BF')+';padding:2px 10px;border-radius:99px;font-weight:800;">'+(pts>0?'+'+pts+' pts':'0 pts')+'</span>';
         h += '</div>';
-        // breakdown do bônus: só quando a fase multiplica e você pontuou
-        if (mult>1 && pts>0) {
-          h += '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:.66rem;color:#7C3AED;flex-wrap:wrap;">';
-          h += '<span style="background:rgba(124,58,237,.1);padding:2px 8px;border-radius:6px;font-weight:700;">'+base+' base × '+mult+' = '+pts+'</span>';
-          h += '<span style="font-weight:700;">🔥 +'+bonus+' de bônus da fase</span>';
-          h += '</div>';
-        }
+        // fonte de cada ponto + base × mult = total (+ bônus)
+        if (pts>0) { h += '<div style="margin-top:6px;">'+Scoring.breakdownHtml(sc)+'</div>'; }
       } else {
         h += '<span style="color:#9CA3BF;">Você não palpitou neste jogo</span>';
       }

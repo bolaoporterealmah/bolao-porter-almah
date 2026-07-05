@@ -171,6 +171,40 @@ const Scoring = {
       pts += correct.length * 5;
     }
     return pts;
+  },
+
+  // Ícone por fonte de ponto (labels vêm de calculate().breakdown)
+  _srcIcon(label) {
+    return {'Placar exato':'🎯','Acertou vencedor':'✅','Acertou empate':'🤝','Saldo de gols':'📊','Gols de um time':'⚽'}[label] || '•';
+  },
+
+  // HTML com a FONTE de cada ponto + base × multiplicador = total (+ bônus da fase).
+  // sc = objeto retornado por Scoring.calculate. Retorna '' se não pontuou.
+  breakdownHtml(sc) {
+    if (!sc || !sc.breakdown || !sc.breakdown.length) return '';
+    const mult = sc.multiplier || 1;
+    const chip = (bg, color, txt) => '<span style="background:'+bg+';color:'+color+';border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap;">'+txt+'</span>';
+    let h = '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:.64rem;color:#5A6385;line-height:1.6;">';
+    h += sc.breakdown.map(c => chip('#EEF0F6','#2D3557', Scoring._srcIcon(c.label)+' '+c.label+' +'+c.pts)).join('');
+    if (mult > 1) {
+      h += '<span style="color:#9CA3BF;">= '+sc.base+'</span>';
+      h += chip('rgba(124,58,237,.12)','#7C3AED','× '+mult+' = '+sc.total);
+      h += '<span style="color:#7C3AED;font-weight:800;white-space:nowrap;">🔥 +'+(sc.total - sc.base)+' bônus</span>';
+    } else {
+      h += chip('rgba(34,197,94,.12)','#16A34A','= '+sc.total+' pts');
+    }
+    h += '</div>';
+    return h;
+  },
+
+  // Versão texto (p/ tooltips title="").
+  breakdownText(sc) {
+    if (!sc || !sc.breakdown || !sc.breakdown.length) return '0 pts';
+    const mult = sc.multiplier || 1;
+    let t = sc.breakdown.map(c => c.label+' +'+c.pts).join(', ');
+    if (mult > 1) t += ' = base '+sc.base+' × '+mult+' = '+sc.total+' (+'+(sc.total - sc.base)+' bônus)';
+    else t += ' = '+sc.total+' pts';
+    return t;
   }
 };
 
