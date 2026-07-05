@@ -329,12 +329,15 @@ window.openParticipantResultsModal = async function(email) {
     var b = betMap[g.id];
     var sc = Scoring.calculate(b, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase});
     var pts = sc ? sc.total : 0;
+    var base = sc ? sc.base : 0;
+    var mult = sc ? sc.multiplier : 1;
+    var bonus = pts - base;
     totalPts += pts;
     var isExact = !!(sc && sc.base === 15);
     if (isExact) exactCount++;
     rows += '<div style="border:1px solid '+(isExact?'#F5C518':'#EEF0F6')+';border-radius:11px;padding:10px 12px;margin-bottom:8px;'+(isExact?'background:linear-gradient(135deg,rgba(245,197,24,.1),rgba(34,197,94,.06));':'')+'">';
     rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">';
-    rows += '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+'</span>';
+    rows += '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+(mult>1?' <span style="background:#7C3AED;color:white;padding:1px 6px;border-radius:99px;font-size:.58rem;">🔥 '+mult+'×</span>':'')+'</span>';
     rows += '<span style="font-size:.62rem;color:#9CA3BF;">'+Utils.formatDate(g.date)+'</span>';
     rows += '</div>';
     rows += '<div style="display:flex;align-items:center;gap:10px;">';
@@ -346,6 +349,9 @@ window.openParticipantResultsModal = async function(email) {
     rows += '<span style="color:#5A6385;">Palpite: <strong style="color:#2D3557;">'+b.home_score+' × '+b.away_score+'</strong>'+(isExact?' 🎯':'')+'</span>';
     rows += '<span style="background:'+(pts>0?'rgba(34,197,94,.12)':'rgba(0,0,0,.05)')+';color:'+(pts>0?'#16A34A':'#9CA3BF')+';padding:2px 10px;border-radius:99px;font-weight:800;">'+(pts>0?'+'+pts+' pts':'0 pts')+'</span>';
     rows += '</div>';
+    if (mult>1 && pts>0) {
+      rows += '<div style="margin-top:6px;font-size:.64rem;color:#7C3AED;display:flex;gap:6px;flex-wrap:wrap;"><span style="background:rgba(124,58,237,.1);padding:2px 7px;border-radius:6px;font-weight:700;">'+base+' base × '+mult+' = '+pts+'</span><span style="font-weight:700;">🔥 +'+bonus+' de bônus</span></div>';
+    }
     rows += '</div>';
   });
 

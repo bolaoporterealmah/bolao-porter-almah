@@ -32,6 +32,7 @@ SPA.pages["resultados"]={style:``,script:function(){
       var bet = myBets[g.id];
       var sc = bet ? Scoring.calculate(bet, {home_score:g.result.home_score, away_score:g.result.away_score, phase:g.phase}) : null;
       var iCravei = !!(sc && sc.base === 15); // usuário acessando cravou o placar exato
+      var mult = Utils.phaseMultiplier(g.phase); // 1.0, 1.2, 1.5, 2.0, 3.0...
       // Card destacado (borda + brilho dourado) quando EU cravei este jogo.
       h += '<div style="background:white;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;'+
         (iCravei
@@ -43,7 +44,7 @@ SPA.pages["resultados"]={style:``,script:function(){
       }
       // header: fase + data
       h += '<div style="padding:9px 14px;background:#F8F9FC;border-bottom:1px solid #EEF0F6;display:flex;align-items:center;justify-content:space-between;">';
-      h += '<span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1B2B6B;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+'</span>';
+      h += '<span style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1B2B6B;">'+Utils.phaseName(g.phase)+(g.group?' · Grupo '+g.group:'')+(mult>1?' <span style="background:#7C3AED;color:white;padding:1px 7px;border-radius:99px;font-size:.6rem;margin-left:4px;" title="Pontos desta fase valem '+mult+'×">🔥 '+mult+'×</span>':'')+'</span>';
       h += '<span style="font-size:.65rem;color:#9CA3BF;">'+Utils.formatDate(g.date)+'</span>';
       h += '</div>';
       // confronto + placar oficial
@@ -53,11 +54,22 @@ SPA.pages["resultados"]={style:``,script:function(){
       h += '<div style="flex:1;text-align:left;font-size:.85rem;font-weight:700;color:#2D3557;">'+flag(g.away)+' '+esc(g.away)+'</div>';
       h += '</div>';
       // meu palpite + pontos
-      h += '<div style="padding:10px 14px;border-top:1px solid #EEF0F6;display:flex;align-items:center;justify-content:space-between;font-size:.75rem;'+(iCravei?'background:rgba(245,197,24,.1);':'')+'">';
+      h += '<div style="padding:10px 14px;border-top:1px solid #EEF0F6;font-size:.75rem;'+(iCravei?'background:rgba(245,197,24,.1);':'')+'">';
       if (bet) {
         var pts = sc ? sc.total : 0;
+        var base = sc ? sc.base : 0;
+        var bonus = pts - base;
+        h += '<div style="display:flex;align-items:center;justify-content:space-between;">';
         h += '<span style="color:#5A6385;">Seu palpite: <strong style="color:'+(iCravei?'#B8860B':'#2D3557')+';">'+bet.home_score+' × '+bet.away_score+'</strong>'+(iCravei?' 🎯':'')+'</span>';
         h += '<span style="background:'+(pts>0?'rgba(34,197,94,.12)':'rgba(0,0,0,.05)')+';color:'+(pts>0?'#16A34A':'#9CA3BF')+';padding:2px 10px;border-radius:99px;font-weight:800;">'+(pts>0?'+'+pts+' pts':'0 pts')+'</span>';
+        h += '</div>';
+        // breakdown do bônus: só quando a fase multiplica e você pontuou
+        if (mult>1 && pts>0) {
+          h += '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:.66rem;color:#7C3AED;flex-wrap:wrap;">';
+          h += '<span style="background:rgba(124,58,237,.1);padding:2px 8px;border-radius:6px;font-weight:700;">'+base+' base × '+mult+' = '+pts+'</span>';
+          h += '<span style="font-weight:700;">🔥 +'+bonus+' de bônus da fase</span>';
+          h += '</div>';
+        }
       } else {
         h += '<span style="color:#9CA3BF;">Você não palpitou neste jogo</span>';
       }
