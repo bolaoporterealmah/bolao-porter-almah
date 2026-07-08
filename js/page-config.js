@@ -9,6 +9,37 @@ function render() {
 
   var h = '';
 
+  if (isAdmin) {
+    // Prank CEO
+    var prank = DB.get('prank_ceo') || {};
+    h += '<div style="margin-bottom:24px;">';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;color:#1B2B6B;margin-bottom:12px;letter-spacing:.5px;">🎉 Modo Celebração</div>';
+    h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:20px;max-width:460px;display:flex;align-items:center;gap:14px;">';
+    h += '<div style="flex:1;"><div style="font-weight:700;font-size:.88rem;color:#1B2B6B;">Homenagem especial no ranking</div>';
+    h += (prank.name ? '<div style="font-size:.75rem;color:#9CA3BF;margin-top:2px;">'+esc(prank.name)+' · '+esc(prank.company||'')+'</div>' : '');
+    h += '</div>';
+    h += '<label style="position:relative;display:inline-block;width:48px;height:26px;cursor:pointer;flex-shrink:0;">';
+    h += '<input type="checkbox" id="prank-toggle" '+(prank.enabled?'checked':'')+' style="opacity:0;width:0;height:0;">';
+    h += '<span style="position:absolute;inset:0;background:'+(prank.enabled?'#16A34A':'#DDE1EE')+';border-radius:26px;transition:.2s;"></span>';
+    h += '<span style="position:absolute;left:'+(prank.enabled?'23px':'3px')+';top:3px;width:20px;height:20px;background:white;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);"></span>';
+    h += '</label></div></div>';
+
+    // Scoring config
+    h += '<div style="margin-bottom:24px;">';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;color:#1B2B6B;margin-bottom:12px;letter-spacing:.5px;">⚙️ Configurações do Bolão</div>';
+    h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:18px;max-width:460px;">';
+    h += '<div style="margin-bottom:14px;"><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Resultado Final — Campeão</label><input id="frChampion" list="teamsList" placeholder="Ex: Brasil" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">';
+    h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Vice-Campeão</label><input id="frVice" list="teamsList" placeholder="Ex: França" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
+    h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">3º Lugar</label><input id="frThird" list="teamsList" placeholder="Ex: Espanha" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
+    h += '</div>';
+    h += '<datalist id="teamsList"><option>Brasil</option><option>Argentina</option><option>França</option><option>Inglaterra</option><option>Espanha</option><option>Alemanha</option><option>Portugal</option><option>Holanda</option><option>Bélgica</option><option>Uruguai</option></datalist>';
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+    h += '<button id="btn-save-config" style="padding:9px 18px;background:#1B2B6B;color:white;border:none;border-radius:9px;font-weight:700;font-size:.88rem;cursor:pointer;">💾 Salvar</button>';
+    h += '<button id="btn-reset-data" style="padding:9px 18px;background:white;border:1.5px solid rgba(239,68,68,.3);border-radius:9px;font-weight:600;font-size:.88rem;cursor:pointer;color:#DC2626;">🗑️ Resetar Dados Demo</button>';
+    h += '</div></div></div>';
+  }
+
   // My profile
   h += '<div style="margin-bottom:24px;">';
   h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;color:#1B2B6B;margin-bottom:12px;letter-spacing:.5px;">👤 Meu Perfil</div>';
@@ -53,21 +84,6 @@ function render() {
       h += '</div>';
     });
     h += '</div></div>';
-
-    // Scoring config
-    h += '<div style="margin-bottom:24px;">';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;color:#1B2B6B;margin-bottom:12px;letter-spacing:.5px;">⚙️ Configurações do Bolão</div>';
-    h += '<div style="background:white;border-radius:14px;border:1px solid #DDE1EE;padding:18px;max-width:460px;">';
-    h += '<div style="margin-bottom:14px;"><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Resultado Final — Campeão</label><input id="frChampion" list="teamsList" placeholder="Ex: Brasil" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
-    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">';
-    h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">Vice-Campeão</label><input id="frVice" list="teamsList" placeholder="Ex: França" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
-    h += '<div><label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;margin-bottom:4px;">3º Lugar</label><input id="frThird" list="teamsList" placeholder="Ex: Espanha" style="width:100%;padding:9px 12px;border:1.5px solid #DDE1EE;border-radius:9px;font-size:.88rem;outline:none;"/></div>';
-    h += '</div>';
-    h += '<datalist id="teamsList"><option>Brasil</option><option>Argentina</option><option>França</option><option>Inglaterra</option><option>Espanha</option><option>Alemanha</option><option>Portugal</option><option>Holanda</option><option>Bélgica</option><option>Uruguai</option></datalist>';
-    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
-    h += '<button id="btn-save-config" style="padding:9px 18px;background:#1B2B6B;color:white;border:none;border-radius:9px;font-weight:700;font-size:.88rem;cursor:pointer;">💾 Salvar</button>';
-    h += '<button id="btn-reset-data" style="padding:9px 18px;background:white;border:1.5px solid rgba(239,68,68,.3);border-radius:9px;font-weight:600;font-size:.88rem;cursor:pointer;color:#DC2626;">🗑️ Resetar Dados Demo</button>';
-    h += '</div></div></div>';
   }
 
   // Logout
@@ -130,6 +146,15 @@ function bindEvents(pc) {
   // Logout
   var logoutBtn = pc.querySelector('[data-action="logout"]');
   if (logoutBtn) logoutBtn.addEventListener('click', function(){ SPA.logout(); });
+
+  // Prank CEO toggle
+  var prankToggle = document.getElementById('prank-toggle');
+  if (prankToggle) prankToggle.addEventListener('change', async function() {
+    var prank = Object.assign({}, DB.get('prank_ceo') || {}, { enabled: prankToggle.checked });
+    await window.savePrankCeo(prank);
+    Utils.toast(prank.enabled ? '🎉 Modo celebração ativado!' : 'Modo celebração desativado', 'success');
+    render();
+  });
 
   // Toggle admin / delete user
   pc.addEventListener('click', function(e) {

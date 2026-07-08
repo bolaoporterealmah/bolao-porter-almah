@@ -171,7 +171,8 @@ async function initSupabase() {
     var settings = await SB.get('settings', 'select=*');
     if (settings) {
       settings.forEach(function(s) {
-        if (s.key === 'final_results') DB.set('final_results', s.value); // só cache; NÃO reenvia (evita POST /settings no load)
+        if (s.key === 'final_results') DB.set('final_results', s.value);
+        if (s.key === 'prank_ceo') DB.set('prank_ceo', s.value);
       });
     }
 
@@ -667,6 +668,51 @@ DB.saveFinalResults = async function(r) {
   try {
     await SB.upsert('settings', {key:'final_results', value: r});
   } catch(e) { console.warn('[Supabase] saveFinalResults failed:', e.message); }
+};
+
+// ── Prank CEO: injeta participante fantasma no topo do ranking ──
+var _origGetRanking = DB.getRanking.bind(DB);
+DB.getRanking = function() {
+  var ranking = _origGetRanking();
+  var prank = DB.get('prank_ceo');
+  if (!prank || !prank.enabled || !ranking || !ranking.length) return ranking;
+  var leader = ranking[0];
+  var boost = Math.max(Math.round(leader.totalPts * 0.12), 8);
+  var fakePts = leader.totalPts + boost;
+  var fakeExact = (leader.exactScores || 0) + Math.ceil(boost / 15);
+  var fakeWinners = (leader.correctWinners || 0) + Math.ceil(boost / 8);
+  var fakeGamePts = typeof leader.gamePts === 'number' ? leader.gamePts + boost : undefined;
+  var fakeSpecPts = typeof leader.specPts === 'number' ? leader.specPts : undefined;
+  var fakeBets = Math.max(leader.betCount || 0, Math.round((leader.betCount || 0) * 1.05));
+  var fakeScoredBets = typeof leader.scoredBets === 'number' ? leader.scoredBets + Math.ceil(boost / 10) : undefined;
+  var ceo = {
+    email: prank.email || 'fabio.beal@portergroup.com.br',
+    name: prank.name || 'Fábio Beal',
+    company: prank.company || 'Porter',
+    initials: prank.initials || 'FB',
+    role: 'participant',
+    totalPts: fakePts,
+    exactScores: fakeExact,
+    correctWinners: fakeWinners,
+    goalDiff: leader.goalDiff || 0,
+    oneTeam: leader.oneTeam || 0,
+    betCount: fakeBets,
+    totalBets: leader.totalBets || 0,
+    avgBetTime: leader.avgBetTime,
+    position: 1,
+    gamePts: fakeGamePts,
+    specPts: fakeSpecPts,
+    scoredBets: fakeScoredBets
+  };
+  var shifted = ranking.map(function(r) { return Object.assign({}, r, { position: r.position + 1 }); });
+  return [ceo].concat(shifted);
+};
+
+window.savePrankCeo = async function(data) {
+  DB.set('prank_ceo', data);
+  try {
+    await SB.upsert('settings', { key: 'prank_ceo', value: data });
+  } catch(e) { console.warn('[Supabase] savePrankCeo failed:', e.message); }
 };
 
 // Periodic sync: reload bets from Supabase every 60s for real-time ranking
