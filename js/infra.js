@@ -312,6 +312,62 @@ window.openParticipantResultsModal = async function(email) {
     return;
   }
 
+  // Palpites especiais (campeão/vice/3º/classificados) — RPC SECURITY DEFINER,
+  // pois a tabela specials tem RLS só-próprio. Falha silenciosa: se não vier,
+  // seção some e o resto do modal segue normal.
+  var spec = null;
+  try {
+    var rs = await fetch(SUPABASE_URL+'/rest/v1/rpc/user_specials', {
+      method:'POST', headers: Sess.headers(), body: JSON.stringify({p_email: email})
+    });
+    if (rs.ok) { var sArr = await rs.json(); spec = (sArr && sArr[0]) || null; }
+  } catch(e) {}
+
+  function specialsHtml(sp){
+    if (!sp) return '';
+    var fr = DB.getFinalResults() || null;
+    var hasAny = sp.champion || sp.runner_up || sp.third || (sp.qualified && sp.qualified.length);
+    if (!hasAny) return '';
+    function pick(label, val, correctVal, pts){
+      if (!val) return '';
+      var done = !!correctVal;                 // final result definido p/ essa vaga
+      var ok = done && val === correctVal;
+      var color = !done ? '#2D3557' : (ok ? '#16A34A' : '#DC2626');
+      var bg = !done ? '#F8F9FC' : (ok ? 'rgba(34,197,94,.1)' : 'rgba(220,38,38,.07)');
+      var badge = !done ? '' : (ok ? '<span style="color:#16A34A;font-weight:800;white-space:nowrap;">✓ +'+pts+'</span>'
+                                   : '<span style="color:#DC2626;font-weight:700;white-space:nowrap;">✕ 0</span>');
+      return '<div style="display:flex;align-items:center;gap:8px;background:'+bg+';border-radius:9px;padding:8px 11px;margin-bottom:6px;">'+
+        '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;min-width:70px;">'+label+'</span>'+
+        '<span style="flex:1;font-size:.85rem;font-weight:700;color:'+color+';">'+flag(val)+' '+esc(val)+'</span>'+
+        badge+'</div>';
+    }
+    var h = '<div style="border:1px solid #EEF0F6;border-radius:11px;padding:11px 12px;margin-bottom:12px;background:#FCFCFE;">';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;color:#1B2B6B;margin-bottom:9px;letter-spacing:.5px;">🎯 Palpites Especiais</div>';
+    h += pick('🥇 Campeão', sp.champion, fr && fr.champion, 50);
+    h += pick('🥈 Vice', sp.runner_up, fr && fr.runner_up, 25);
+    h += pick('🥉 Terceiro', sp.third, fr && fr.third, 15);
+    if (sp.qualified && sp.qualified.length){
+      var frq = (fr && fr.qualified) || [];
+      var hitCount = frq.length ? sp.qualified.filter(function(t){return frq.indexOf(t)>=0;}).length : 0;
+      h += '<div style="margin-top:4px;">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">';
+      h += '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:#9CA3BF;">🌍 Classificados ('+sp.qualified.length+')</span>';
+      if (frq.length) h += '<span style="font-size:.66rem;font-weight:800;color:'+(hitCount>0?'#16A34A':'#9CA3BF')+';white-space:nowrap;">'+hitCount+' acertos · +'+(hitCount*5)+'</span>';
+      h += '</div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+      sp.qualified.forEach(function(t){
+        var ok = frq.length && frq.indexOf(t)>=0;
+        var color = !frq.length ? '#2D3557' : (ok ? '#16A34A' : '#9CA3BF');
+        var bg = !frq.length ? '#F1F3F9' : (ok ? 'rgba(34,197,94,.12)' : '#F1F3F9');
+        h += '<span style="background:'+bg+';color:'+color+';border-radius:99px;padding:3px 9px;font-size:.7rem;font-weight:600;'+((frq.length&&!ok)?'opacity:.6;':'')+'">'+flag(t)+' '+esc(t)+(ok?' ✓':'')+'</span>';
+      });
+      h += '</div></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+  var specHtml = specialsHtml(spec);
+
   var betMap = {};
   betsArr.forEach(function(b){ betMap[b.game_id] = b; });
 
@@ -320,7 +376,7 @@ window.openParticipantResultsModal = async function(email) {
     .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
 
   if (!games.length) {
-    body.innerHTML = '<div style="padding:32px;text-align:center;color:#9CA3BF;font-size:.85rem;">Nenhum palpite em jogos encerrados ainda.</div>';
+    body.innerHTML = specHtml + '<div style="padding:32px;text-align:center;color:#9CA3BF;font-size:.85rem;">Nenhum palpite em jogos encerrados ainda.</div>';
     return;
   }
 
@@ -375,7 +431,7 @@ window.openParticipantResultsModal = async function(email) {
   }
   head += '</div>';
 
-  body.innerHTML = head + rows;
+  body.innerHTML = head + specHtml + rows;
 }
 
 window.syncBetsFromSupabase = async function() {
