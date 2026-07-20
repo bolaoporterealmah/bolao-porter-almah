@@ -844,5 +844,5 @@ document.addEventListener('click', function _apostasGlobalHandler(e) {
     if (window.reconcileLocalBets) await reconcileLocalBets();
   }
   var _h=(window.location.hash||'').replace('#','');
-  SPA.navigate(SPA.pages[_h] ? _h : (Sess.get()?'dashboard':'login'));
+  SPA.navigate(SPA.pages[_h] ? _h : (Sess.get()?'home':'login'));
 })();

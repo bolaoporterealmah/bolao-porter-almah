@@ -26,6 +26,15 @@
   </div>
   <div style="text-align:center;margin-top:18px;font-size:.75rem;color:#9CA3BF;">Acesso somente para colaboradores.<br/>Dúvidas? Fale com <strong style="color:#1B2B6B">RH Porter ou Almah</strong></div>
 </div></div></template>
+<template id="tpl-home"><div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar"></header>
+    <div class="page-content" id="pageContent">
+      <div class="page-loader"><div class="loader"></div></div>
+    </div>
+  </div>
+</div></template>
 <template id="tpl-dashboard"><div class="app-layout">
   <aside class="sidebar" id="sidebar"><!-- injected --></aside>
   <div class="main-content">
@@ -101,7 +110,7 @@
 <div id="spa-root"></div>
 <div class="toast-container" id="toastContainer"></div>
 <!-- ÚNICO ponto de versão: bump aqui recarrega todos os js (fura cache de CDN/navegador) -->
-<script>window.APP_VERSION='35';</script>
+<script>window.APP_VERSION='37';</script>
 <script src="js/loader.js?v=16"></script> 
 </body>
 </html>

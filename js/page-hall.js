@@ -55,8 +55,19 @@ SPA.pages["hall"]={style:`.hall-hero {
 .medal-holder .h-val { font-family:var(--font-display); font-size:1rem; font-weight:900; color:var(--porter-blue); }
 
 .tbd-badge { display:inline-flex; align-items:center; gap:4px; background:var(--porter-gray-100); border-radius:99px; padding:4px 12px; font-size:0.72rem; color:var(--porter-gray-400); font-weight:600; }`,script:function(){
+  function renderHall(){ var pc=document.getElementById('pageContent'); if(pc) pc.innerHTML=window.buildHallHtml(); }
+  renderHall();
+  // re-sincroniza do servidor e re-renderiza. ranking → prêmios "de graça"; RPCs → prêmios globais.
+  if (window.syncRankingFromSupabase) syncRankingFromSupabase().then(renderHall);
+  [ 'syncMostExactGameFromSupabase','syncTopDistributingGameFromSupabase','syncBottomDistributingGameFromSupabase',
+    'syncBiggestClimbFromSupabase','syncHottestStreakFromSupabase','syncRarestExactFromSupabase',
+    'syncKnockoutProphetFromSupabase','syncPerfectPredictorsFromSupabase','syncCompanyDuelFromSupabase'
+  ].forEach(function(fn){ if (window[fn]) window[fn]().then(renderHall); });
+}};
 
-function renderHall(){
+// Builder GLOBAL — retorna o HTML do Hall (sem escrever no DOM). Definido no
+// load (top-level), então a Home pode reaproveitar sem visitar a página Hall.
+window.buildHallHtml = function(){
   var user = Auth.user;
   var ranking = DB.getRanking();
   var games = DB.getGames();
@@ -94,8 +105,6 @@ function renderHall(){
   var duel    = DB.get('company_duel', []) || [];
 
   var copa_started = finishedGames.length > 0;
-  var pc = document.getElementById('pageContent');
-  if (!pc) return;
 
   var h = '';
 
@@ -284,15 +293,5 @@ function renderHall(){
   });
   h += '</div></div>';
 
-  pc.innerHTML = h;
-}
-renderHall();
-// re-sincroniza do servidor e re-renderiza. ranking → prêmios "de graça"; RPCs → prêmios globais.
-if (window.syncRankingFromSupabase) syncRankingFromSupabase().then(renderHall);
-[ 'syncMostExactGameFromSupabase','syncTopDistributingGameFromSupabase','syncBottomDistributingGameFromSupabase',
-  'syncBiggestClimbFromSupabase','syncHottestStreakFromSupabase','syncRarestExactFromSupabase',
-  'syncKnockoutProphetFromSupabase','syncPerfectPredictorsFromSupabase','syncCompanyDuelFromSupabase'
-].forEach(function(fn){ if (window[fn]) window[fn]().then(renderHall); });
-
-
-}};
+  return h;
+};

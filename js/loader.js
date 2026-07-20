@@ -6,6 +6,7 @@
   var files = [
     'core',
     'page-login',
+    'page-home',
     'page-dashboard',
     'page-palpites',
     'page-apostas',

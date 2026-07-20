@@ -1965,6 +1965,7 @@ var SPA={
   
   _shell: function(page, user) {
     var NAV=[
+      {id:"home",icon:"🎉",label:"Campeões"},
       {id:"dashboard",icon:"🏠",label:"Dashboard"},
       {id:"apostas",icon:"⚽",label:"Palpites"},
       {id:"apostas_dia",icon:"📋",label:"Palpites do Dia"},
@@ -1995,7 +1996,7 @@ var SPA={
       sb.innerHTML=h;
       sb.addEventListener('click',function(e){var a=e.target.closest('[data-nav]');if(a)SPA.navigate(a.getAttribute('data-nav'));});
     }
-    var LABELS={dashboard:'Dashboard',apostas:'Apostas','apostas_dia':'Palpites do Dia',ranking:'Ranking',palpites:'Palpites Especiais',regras:'Regras & Pontuação',chaveamento:'Chaveamento',perfil:'Meu Perfil',hall:'Hall da Fama',admin:'Gerenciar Jogos',config:'Configurações'};
+    var LABELS={home:'Campeões',dashboard:'Dashboard',apostas:'Apostas','apostas_dia':'Palpites do Dia',ranking:'Ranking',palpites:'Palpites Especiais',regras:'Regras & Pontuação',chaveamento:'Chaveamento',perfil:'Meu Perfil',hall:'Hall da Fama',admin:'Gerenciar Jogos',config:'Configurações'};
     var tb=document.querySelector('.topbar');
     if(tb){
       var t='<div class="topbar-left"><button class="topbar-btn menu-toggle" data-action="togglesidebar"><span style="font-size:1.2rem">☰</span></button><span class="topbar-title">'+(LABELS[page]||'')+'</span></div><div class="topbar-right">';

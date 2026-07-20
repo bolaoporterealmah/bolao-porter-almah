@@ -111,7 +111,7 @@ SPA.pages["login"]={style:`.login-bg {
 #loginForm { display: flex; flex-direction: column; gap: 0; }`,script:function(){
 
 (function(){
-  if(Sess.get()){SPA.navigate('dashboard');return;}
+  if(Sess.get()){SPA.navigate('home');return;}
   // ── Login / Cadastro via Supabase Auth ──────────────────────────────
   var mode='login';
   var emailEl=document.getElementById('inp-email');
@@ -152,7 +152,7 @@ SPA.pages["login"]={style:`.login-bg {
       } else {
         await sbLogin(email,pass);
       }
-      SPA.navigate('dashboard');
+      SPA.navigate('home');
     }catch(e){
       showErr((e&&e.message)||'Falha. Verifique os dados.');
       if(btnEl){ btnEl.disabled=false; }
